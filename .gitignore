@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+build/
+data/
+*.sqlite
+*.sqlite-*
+*.db
+.svelte-kit/
+.DS_Store

@@ -1,0 +1,16 @@
+services:
+  gmailstat:
+    build: .
+    image: gmail-drive-stat
+    env_file: .env
+    environment:
+      # La base vit dans le volume, quel que soit le réglage du fichier .env.
+      DATABASE_PATH: /data/gmailstat.sqlite
+    ports:
+      - "${PORT:-8080}:${PORT:-8080}"
+    volumes:
+      - gmailstat-data:/data
+    restart: unless-stopped
+
+volumes:
+  gmailstat-data:
