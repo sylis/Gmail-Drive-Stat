@@ -1,0 +1,774 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Wireframe Gmail Drive Stat</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout : une colonne de lecture ; chaque écran = un cadre filaire (défilement horizontal si étroit) + ses annotations numérotées. */
+:root {
+  --bg: #F3F5F8; --surface: #FFFFFF; --ink: #1E2430; --muted: #646D80; --line: #C5CBD6; --fill: #E5E9F0; --fill2: #D5DBE5;
+  --accent: #2C57CF; --accent-soft: #E3EAFB; --danger: #BF3B28; --danger-soft: #FBE6E2; --ok: #2E8A57;
+  --t-img: #3E9E6B; --t-vid: #8656E8; --t-pdf: #D24F49; --t-doc: #3A7FC2; --t-zip: #D3962A; --t-aud: #CF5C9C; --t-oth: #3FA7A7; --t-none: #A7ADB8;
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #13161C; --surface: #1B1F27; --ink: #E5E8ED; --muted: #98A0AF; --line: #3A414E; --fill: #262B35; --fill2: #313744;
+  --accent: #82A5FF; --accent-soft: #23305A; --danger: #F0806C; --danger-soft: #4A231D; --ok: #5CC28A; --t-none: #5D6472; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #13161C; --surface: #1B1F27; --ink: #E5E8ED; --muted: #98A0AF; --line: #3A414E; --fill: #262B35; --fill2: #313744;
+  --accent: #82A5FF; --accent-soft: #23305A; --danger: #F0806C; --danger-soft: #4A231D; --ok: #5CC28A; --t-none: #5D6472; color-scheme: dark }
+
+body { background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body); }
+.page { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 40px 80px; display: flex; flex-direction: column; gap: 56px; }
+h1, h2, h3 { font-family: var(--f-display); text-wrap: balance; margin: 0; line-height: 1.15; }
+h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -.01em; }
+h2 { font-size: 24px; font-weight: 700; }
+h3 { font-size: 16px; font-weight: 700; }
+p { margin: 0; max-width: 68ch; }
+.eyebrow { font: 500 12px/1 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.lede { color: var(--muted); font-size: 16px; }
+header.intro { display: flex; flex-direction: column; gap: 14px; }
+
+/* Parcours */
+.flow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font: 500 13px/1.2 var(--f-mono); }
+.flow a { color: var(--ink); text-decoration: none; border: 1.5px solid var(--line); background: var(--surface); padding: 7px 11px; border-radius: 4px; }
+.flow a:hover, .flow a:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+.flow .arr { color: var(--muted); }
+.flow .loop { color: var(--muted); font-family: var(--f-body); font-size: 13px; }
+
+section.screen { display: flex; flex-direction: column; gap: 18px; scroll-margin-top: 20px; }
+.screen-head { display: flex; flex-direction: column; gap: 6px; }
+
+/* Cadre filaire */
+.scroller { overflow-x: auto; border-radius: 8px; }
+.wf { min-width: 1040px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 8px; overflow: hidden; font-size: 13px; position: relative; }
+.wf.narrow { min-width: 760px; }
+.chrome { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1.5px solid var(--line); background: var(--fill); }
+.chrome i { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--line); display: block; }
+.chrome .url { flex: 1; margin-left: 10px; background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 3px 10px; font: 12px var(--f-mono); color: var(--muted); }
+
+.box { border: 1.5px solid var(--line); border-radius: 4px; background: var(--surface); }
+.dash { border: 1.5px dashed var(--line); border-radius: 4px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; border: 1.5px solid var(--ink); border-radius: 4px; padding: 5px 11px; font: 500 12.5px var(--f-body); background: var(--surface); color: var(--ink); white-space: nowrap; }
+.btn.primary { background: var(--ink); color: var(--surface); }
+.btn.ghost { border-color: var(--line); color: var(--muted); }
+.btn.danger { border-color: var(--danger); color: var(--danger); }
+.btn.danger.solid { background: var(--danger); color: var(--surface); }
+.btn.disabled { opacity: .4; }
+.input { border: 1.5px solid var(--line); border-radius: 4px; padding: 4px 8px; color: var(--muted); background: var(--surface); font: 12.5px var(--f-mono); white-space: nowrap; }
+.chip { display: inline-flex; align-items: center; gap: 5px; border: 1.5px solid var(--line); border-radius: 999px; padding: 2px 9px; font-size: 12px; white-space: nowrap; background: var(--surface); }
+.chip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.sw { width: 10px; height: 10px; border-radius: 2px; display: inline-block; flex: none; }
+.ph { height: 8px; border-radius: 4px; background: var(--fill2); }
+.lbl { font: 500 11px/1.2 var(--f-mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+.mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.row { display: flex; align-items: center; gap: 8px; }
+.col { display: flex; flex-direction: column; gap: 8px; }
+.grow { flex: 1; min-width: 0; }
+.radio { width: 12px; height: 12px; border: 1.5px solid var(--ink); border-radius: 50%; display: inline-block; flex: none; position: relative; }
+.radio.on::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--ink); }
+.check { width: 12px; height: 12px; border: 1.5px solid var(--ink); border-radius: 2px; display: inline-block; flex: none; position: relative; }
+.check.on::after { content: ""; position: absolute; inset: 2px; background: var(--ink); }
+.bar { height: 8px; border-radius: 4px; background: var(--fill2); overflow: hidden; }
+.bar > span { display: block; height: 100%; background: var(--ink); }
+
+/* Marqueurs d'annotation */
+.n { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: var(--surface); font: 600 11px/1 var(--f-mono); flex: none; }
+.wf .n { box-shadow: 0 0 0 3px var(--surface); }
+.pin { position: absolute; z-index: 3; }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px 28px; margin: 0; padding: 0; list-style: none; }
+.notes li { display: flex; gap: 10px; align-items: flex-start; min-width: 0; font-size: 14px; }
+.notes li b { font-weight: 600; }
+
+/* Écran principal */
+.topbar { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-bottom: 1.5px solid var(--line); }
+.logo { font: 800 15px var(--f-display); letter-spacing: -.01em; }
+.tabs { display: flex; gap: 4px; }
+.tab { padding: 4px 10px; border-radius: 4px; font-weight: 600; }
+.tab.on { background: var(--fill); }
+.tab.off { color: var(--muted); font-weight: 400; }
+.quota { display: flex; flex-direction: column; gap: 3px; width: 210px; }
+.quota .bar { display: flex; background: var(--fill); }
+.quota .bar span:nth-child(1) { background: var(--ink); }
+.quota .bar span:nth-child(2) { background: var(--muted); }
+.quota .bar span:nth-child(3) { background: var(--fill2); }
+.scopebar { display: flex; align-items: center; gap: 10px; padding: 8px 14px; border-bottom: 1.5px solid var(--line); background: var(--fill); flex-wrap: wrap; }
+.main { display: grid; grid-template-columns: 230px minmax(0, 1fr) 250px; min-height: 560px; }
+.filters { border-right: 1.5px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.axis { border-bottom: 1px solid var(--line); padding-bottom: 9px; display: flex; flex-direction: column; gap: 6px; }
+.axis:last-child { border-bottom: 0; }
+.axis-h { display: flex; justify-content: space-between; align-items: center; font-weight: 600; font-size: 12.5px; }
+.axis-h .muted { font-weight: 400; font-size: 12px; }
+.center { padding: 12px; display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.levels { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.level { border: 1.5px solid var(--ink); border-radius: 4px; padding: 2px 8px; font-weight: 600; font-size: 12px; background: var(--surface); }
+.level::before { content: "⋮⋮ "; color: var(--muted); letter-spacing: -2px; }
+.crumbs { font: 12px var(--f-mono); color: var(--muted); }
+.crumbs b { color: var(--ink); font-weight: 500; }
+.tm-wrap { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; }
+.tm { position: relative; height: 400px; background: var(--fill); border: 1.5px solid var(--line); border-radius: 4px; overflow: hidden; }
+.seg { display: inline-flex; border: 1.5px solid var(--ink); border-radius: 4px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); color: var(--ink); font: 500 12px var(--f-body); padding: 3px 10px; cursor: pointer; }
+.seg button + button { border-left: 1.5px solid var(--ink); }
+.seg button.on { background: var(--ink); color: var(--surface); }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -3px; }
+.list { height: 400px; overflow: auto; border: 1.5px solid var(--line); border-radius: 4px; background: var(--surface); }
+.list table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.list th { position: sticky; top: 0; background: var(--fill); text-align: left; font: 500 10.5px var(--f-mono); letter-spacing: .03em; text-transform: uppercase; color: var(--muted); padding: 6px 6px; border-bottom: 1.5px solid var(--line); white-space: nowrap; cursor: pointer; user-select: none; }
+.list th.num, .list td.num { text-align: right; }
+.list th.on { color: var(--ink); }
+.list td { padding: 5px 6px; border-bottom: 1px solid var(--fill); white-space: nowrap; max-width: 150px; overflow: hidden; text-overflow: ellipsis; }
+.list td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.list tr { cursor: pointer; }
+.list tbody tr:hover { background: var(--fill); }
+.list tr.sel { background: var(--accent-soft); }
+.list .szbar { display: inline-block; height: 6px; border-radius: 3px; background: var(--fill2); vertical-align: middle; margin-right: 6px; }
+.msgs { border-top: 1.5px solid var(--line); padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; }
+.msgs .list { height: auto; max-height: 190px; }
+.msgs tr { cursor: default; }
+.zone { position: relative; width: 96px; height: 400px; border: 1.5px dashed var(--line); border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; }
+.zone .th { padding: 5px 6px; font-size: 11px; line-height: 1.3; border-bottom: 1px dashed var(--line); display: flex; flex-direction: column; gap: 1px; }
+.zone .th .row { justify-content: space-between; gap: 4px; }
+.zone .tb { position: relative; flex: 1; }
+.fold { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 3px; font: 11px var(--f-mono); padding: 0 4px; cursor: pointer; line-height: 16px; }
+.fold:focus-visible { outline: 2px solid var(--accent); }
+.zone.closed { width: 28px; }
+.zone.closed .th { border-bottom: 0; align-items: center; padding: 6px 0; height: 100%; }
+.zone.closed .th > *:not(.row):not(.vt), .zone.closed .tb, .zone.closed .zt { display: none; }
+.zone.closed .th .row { flex-direction: column; }
+.zone .vt { display: none; writing-mode: vertical-rl; transform: rotate(180deg); font-size: 11px; white-space: nowrap; margin-top: 6px; }
+.zone.closed .vt { display: block; }
+.node { position: absolute; box-sizing: border-box; border: 1px solid var(--line); overflow: hidden; }
+.node .nl { position: absolute; left: 3px; top: 1px; right: 3px; font: 500 10.5px/14px var(--f-mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.node.y { background: var(--surface); border: 1.5px solid var(--ink); }
+.node.y > .nl { font-weight: 600; font-size: 11px; }
+.node.q { background: var(--fill); }
+.node.d { background: var(--fill2); border-color: var(--surface); }
+.node.d > .nl { color: var(--ink); font-size: 10px; }
+.brick { position: absolute; box-sizing: border-box; border: 1px solid var(--surface); cursor: pointer;
+  background-image: radial-gradient(ellipse at 32% 28%, rgba(255,255,255,.42), rgba(255,255,255,0) 62%, rgba(0,0,0,.14)); }
+.brick:hover { filter: brightness(1.12); }
+.brick.sel { outline: 2.5px solid var(--ink); outline-offset: -2px; z-index: 2; }
+.brick.hatch { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.55) 0 3px, rgba(255,255,255,0) 3px 7px); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.detail { border-left: 1.5px solid var(--line); padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.kv { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 4px 8px; font-size: 12.5px; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; overflow-wrap: anywhere; }
+.att { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.att .mono { margin-left: auto; color: var(--muted); }
+.actionbar { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1.5px solid var(--line); background: var(--fill); flex-wrap: wrap; }
+.actionbar .sep { width: 1.5px; height: 22px; background: var(--line); }
+.target { display: flex; gap: 12px; align-items: center; font-size: 12.5px; }
+
+/* Modales */
+.dim { background: color-mix(in srgb, var(--ink) 22%, var(--fill)); padding: 34px; display: flex; justify-content: center; gap: 28px; flex-wrap: wrap; position: relative; }
+.modal { background: var(--surface); border: 1.5px solid var(--ink); border-radius: 6px; width: 460px; display: flex; flex-direction: column; }
+.modal .mh { padding: 12px 16px; border-bottom: 1.5px solid var(--line); font-weight: 700; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+.modal .mb { padding: 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.modal .mf { padding: 10px 16px; border-top: 1.5px solid var(--line); display: flex; justify-content: flex-end; gap: 8px; }
+.modal.danger { border-color: var(--danger); }
+.modal.danger .mh { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.hint { font-size: 12px; color: var(--muted); }
+.callout { border-left: 3px solid var(--accent); background: var(--accent-soft); padding: 7px 10px; font-size: 12.5px; border-radius: 0 4px 4px 0; }
+.callout.warn { border-color: var(--danger); background: var(--danger-soft); }
+.mini { font-size: 12px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 10px; }
+.mini .mono { text-align: right; }
+
+/* Connexion */
+.login { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; padding: 40px; background: var(--fill); }
+.setup { grid-column: 1 / -1; }
+.setup ol { margin: 0; padding: 0; list-style: none; counter-reset: st; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px; }
+.setup ol li { counter-increment: st; display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 8px; font-size: 12.5px; line-height: 1.45; }
+.setup ol li::before { content: counter(st); width: 20px; height: 20px; border: 1.5px solid var(--ink); border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 600 11px var(--f-mono); }
+.setup code { font: 11.5px var(--f-mono); background: var(--fill); border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; overflow-wrap: anywhere; }
+.card { background: var(--surface); border: 1.5px solid var(--line); border-radius: 6px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+.gbtn { border: 1.5px solid var(--ink); border-radius: 4px; padding: 9px 14px; display: flex; align-items: center; gap: 10px; font-weight: 600; justify-content: center; }
+.gbtn i { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--ink); display: block; }
+
+/* Scan */
+.scan { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 24px; padding: 24px; }
+.step { display: grid; grid-template-columns: 22px minmax(0, 1fr); gap: 4px 10px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.step:last-child { border-bottom: 0; }
+.st { width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid var(--ink); display: flex; align-items: center; justify-content: center; font-size: 11px; }
+.st.done { background: var(--ink); color: var(--surface); }
+.st.wait { border-style: dashed; border-color: var(--muted); }
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.stat { border: 1.5px solid var(--line); border-radius: 4px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.stat b { font-size: 18px; font-weight: 600; }
+.ghost-tm { height: 190px; display: grid; grid-template-columns: 3fr 2fr; grid-template-rows: 2fr 1fr; gap: 3px; }
+.ghost-tm div { background: var(--fill2); border-radius: 2px; }
+.ghost-tm div:first-child { grid-row: span 2; }
+.toast { position: absolute; right: 18px; bottom: 18px; background: var(--ink); color: var(--surface); border-radius: 6px; padding: 10px 14px; display: flex; gap: 14px; align-items: center; font-size: 12.5px; z-index: 4; }
+.toast u { text-decoration: none; font-weight: 600; border-bottom: 1px solid currentColor; }
+
+/* Questions */
+.qs { display: flex; flex-direction: column; gap: 0; border-top: 1.5px solid var(--line); }
+.q { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 4px 12px; padding: 16px 0; border-bottom: 1.5px solid var(--line); }
+.q .qn { font: 600 13px/22px var(--f-mono); color: var(--accent); }
+.q h3 { font-size: 16px; }
+.q .opts { grid-column: 2; display: flex; flex-wrap: wrap; gap: 6px 10px; margin-top: 6px; }
+.q .opt { font-size: 13.5px; border: 1.5px solid var(--line); border-radius: 4px; padding: 3px 9px; background: var(--surface); }
+.q .opt.reco { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+.q .opt.reco::after { content: "  · recommandé"; font-weight: 400; font-size: 12px; }
+.q p { grid-column: 2; color: var(--muted); font-size: 14px; }
+footer { color: var(--muted); font-size: 13px; }
+
+@media (max-width: 640px) {
+  .page { padding-inline: 16px; gap: 44px; }
+  .q { grid-template-columns: 26px minmax(0, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="page">
+
+<header class="intro">
+  <span class="eyebrow">Maquette basse fidélité · v1 Gmail</span>
+  <h1>Wireframe de Gmail Drive Stat</h1>
+  <p class="lede">Six écrans pour valider l'ergonomie avant d'écrire la moindre ligne de code. Les formes sont volontairement brutes : seule la couleur des briques est significative, car elle porte le type de pièce jointe. Les chiffres, domaines et sujets sont fictifs.</p>
+  <nav class="flow" aria-label="Parcours">
+    <a href="#connexion">1 Connexion</a><span class="arr">→</span>
+    <a href="#perimetre">2 Périmètre</a><span class="arr">→</span>
+    <a href="#scan">3 Scan</a><span class="arr">→</span>
+    <a href="#vue">4 Vue principale</a><span class="arr">→</span>
+    <a href="#confirmation">5 Confirmation</a><span class="arr">→</span>
+    <a href="#resultat">6 Résultat</a>
+    <span class="loop">· le bouton Actualiser ramène à l'écran 2</span>
+  </nav>
+</header>
+
+<!-- 1. CONNEXION -->
+<section class="screen" id="connexion">
+  <div class="screen-head"><span class="eyebrow">Écran 1</span><h2>Connexion</h2>
+    <p class="muted">Un seul verrou : se connecter avec son compte Google ouvre l'application et donne accès à la boîte.</p></div>
+  <div class="scroller"><div class="wf narrow">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">http://serveur.local:8080/connexion</span></div>
+    <div class="login">
+      <div class="card">
+        <div class="row"><span class="n">1</span><h3>Gmail Drive Stat</h3></div>
+        <p class="hint">Connectez-vous avec votre compte Google. L'outil demandera à lire et modifier vos e-mails Gmail. Rien ne quitte ce serveur.</p>
+        <div class="gbtn"><i></i>Se connecter avec Google</div>
+      </div>
+      <div class="col" style="gap:14px">
+        <div class="card">
+          <div class="row"><span class="n">2</span><h3>Compte refusé</h3></div>
+          <div class="callout warn">autre.compte@gmail.com n'est pas autorisé sur ce serveur. <b>Utiliser un autre compte</b></div>
+        </div>
+        <div class="card">
+          <div class="row"><span class="n">3</span><h3>Autorisation expirée</h3></div>
+          <div class="callout">Google a mis fin à votre session (mode test). Reconnectez-vous : vos analyses sont conservées.</div>
+        </div>
+      </div>
+      <div class="card setup">
+        <div class="row"><span class="n">4</span><h3 class="grow">Première installation : créer votre accès Google</h3><span class="chip">À faire une seule fois · environ 10 min</span></div>
+        <div class="callout warn">Aucun identifiant Google n'est configuré sur ce serveur. Suivez ces étapes, puis redémarrez le conteneur.</div>
+        <ol>
+          <li><span>Ouvrez <code>console.cloud.google.com</code> avec votre compte Gmail et <b>créez un projet</b>, par exemple « Gmail Drive Stat ».</span></li>
+          <li><span>Dans <b>API et services › Bibliothèque</b>, activez <b>Gmail API</b>.</span></li>
+          <li><span>Dans <b>Écran de consentement OAuth</b>, choisissez le type <b>Externe</b>, donnez un nom à l'application et votre e-mail de contact. Laissez l'application <b>en mode Test</b>.</span></li>
+          <li><span>Dans <b>Utilisateurs test</b>, ajoutez votre adresse Gmail.</span></li>
+          <li><span>Dans <b>Accès aux données</b>, ajoutez le champ d'application <code>https://mail.google.com/</code> (accès complet, nécessaire pour la suppression définitive).</span></li>
+          <li><span>Dans <b>Identifiants › Créer des identifiants › ID client OAuth</b>, choisissez <b>Application Web</b> et collez cette URI de redirection : <code>http://serveur.local:8080/auth/callback</code> <span class="btn ghost" style="padding:0 6px;font-size:11px">Copier</span></span></li>
+          <li><span>Copiez l'<b>ID client</b> et le <b>code secret</b> dans votre fichier <code>.env</code> : <code>GOOGLE_CLIENT_ID</code>, <code>GOOGLE_CLIENT_SECRET</code>, et votre adresse dans <code>ALLOWED_EMAILS</code>.</span></li>
+          <li><span>Redémarrez le conteneur, puis cliquez sur <b>Vérifier la configuration</b>. Le bouton « Se connecter avec Google » devient actif.</span></li>
+        </ol>
+        <div class="row"><span class="btn primary">Vérifier la configuration</span><span class="hint">Les intitulés de la console Google changent souvent : le guide d'installation du dépôt fera foi, avec captures d'écran.</span></div>
+      </div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><span class="n">1</span><span><b>Connexion Google seule.</b> Pas de mot de passe propre à l'outil : une fois authentifié, on arrive sur l'écran Périmètre (premier passage) ou directement sur la vue principale.</span></li>
+    <li><span class="n">2</span><span><b>Compte autorisé.</b> Le serveur n'accepte que l'adresse Gmail déclarée à l'installation (variable d'environnement). Sans ce contrôle, n'importe quel compte de test pourrait ouvrir l'outil.</span></li>
+    <li><span class="n">3</span><span><b>Expiration périodique.</b> En mode test, Google retire l'autorisation régulièrement. On revient alors sur cet écran avec ce message ; les données en base restent intactes.</span></li>
+    <li><span class="n">4</span><span><b>Première installation.</b> Le pavé s'affiche tant que les identifiants Google manquent, puis disparaît (il reste accessible par un lien « Aide à l'installation »). L'URI de redirection est calculée à partir de l'adresse publique configurée, prête à copier.</span></li>
+  </ol>
+</section>
+
+<!-- 2. PÉRIMÈTRE -->
+<section class="screen" id="perimetre">
+  <div class="screen-head"><span class="eyebrow">Écran 2</span><h2>Pré-filtre du périmètre</h2>
+    <p class="muted">Posé avant le premier scan, puis à chaque clic sur Actualiser, prérempli avec le dernier choix.</p></div>
+  <div class="scroller"><div class="wf narrow">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">http://serveur.local:8080/gmail</span></div>
+    <div class="dim">
+      <div class="modal" style="width:540px">
+        <div class="mh">Que voulez-vous analyser ?</div>
+        <div class="mb">
+          <div class="field"><div class="row"><span class="n">1</span><span class="lbl">Période</span></div>
+            <div class="row"><span class="radio"></span>Les <span class="input">90</span> derniers jours</div>
+            <div class="row"><span class="radio on"></span>Du <span class="input">01/01/2019</span> au <span class="input">aujourd'hui</span></div>
+            <div class="row"><span class="radio"></span>Toute la boîte</div>
+          </div>
+          <div class="field"><div class="row"><span class="n">2</span><span class="lbl">Libellés</span></div>
+            <div class="row"><span class="input grow">Tous les libellés ▾</span></div>
+          </div>
+          <div class="field"><div class="row"><span class="n">3</span><span class="lbl">Taille minimale d'un message</span></div>
+            <div class="row"><span class="input">1 Mo ▾</span><span class="hint">Commencer par les gros messages trouve vite l'essentiel de l'espace.</span></div>
+          </div>
+          <div class="field"><div class="row"><span class="n">4</span><span class="lbl">Détail des pièces jointes</span></div>
+            <div class="row"><span class="radio on"></span>Messages de plus de 1 Mo seulement (plus rapide)</div>
+            <div class="row"><span class="radio"></span>Tous les messages (plus long)</div>
+          </div>
+          <div class="callout"><span class="n" style="width:16px;height:16px;font-size:10px;margin-right:4px">5</span><b>≈ 18 400 messages</b> correspondent, selon Gmail. Déjà en base : 2019 → 2023. Seuls les nouveaux et les changements seront lus.</div>
+        </div>
+        <div class="mf"><span class="btn ghost">Annuler</span><span class="btn primary">Lancer le scan</span></div>
+      </div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><span class="n">1</span><span><b>Période :</b> derniers X jours, plage du… au…, ou tout. Une conversation à cheval sur la limite est lue en entier.</span></li>
+    <li><span class="n">2</span><span><b>Libellés :</b> liste à cases, en arborescence comme dans Gmail.</span></li>
+    <li><span class="n">3</span><span><b>Taille minimale</b> transmise à la recherche Gmail, donc les petits messages ne sont même pas listés.</span></li>
+    <li><span class="n">4</span><span><b>Détail des pièces jointes :</b> c'est ce qui ralentit le scan. Choix exposé ici plutôt que caché dans un réglage.</span></li>
+    <li><span class="n">5</span><span><b>Estimation et cumul :</b> le nouveau périmètre s'ajoute à ce qui est déjà en base, sans tout relire.</span></li>
+  </ol>
+</section>
+
+<!-- 3. SCAN -->
+<section class="screen" id="scan">
+  <div class="screen-head"><span class="eyebrow">Écran 3</span><h2>Progression du scan</h2>
+    <p class="muted">Le scan tourne sur le serveur : on peut fermer l'onglet et revenir plus tard.</p></div>
+  <div class="scroller"><div class="wf">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">http://serveur.local:8080/gmail/scan</span></div>
+    <div class="topbar"><span class="logo">Gmail Drive Stat</span><div class="tabs"><span class="tab on">Gmail</span><span class="tab off">Drive · bientôt</span></div><span class="grow"></span><span class="muted">vous@gmail.com</span></div>
+    <div class="scan">
+      <div class="col" style="gap:4px">
+        <div class="row" style="justify-content:space-between"><h3>Scan en cours · 2019 → aujourd'hui, ≥ 1 Mo</h3><span class="n">1</span></div>
+        <div class="step"><span class="st done">✓</span><div class="col" style="gap:3px"><b>Liste des conversations</b><span class="muted mono">6 230 conversations · 18 410 messages</span></div></div>
+        <div class="step"><span class="st">2</span><div class="col" style="gap:5px"><div class="row"><b class="grow">Lecture des métadonnées</b><span class="mono">11 960 / 18 410</span></div><div class="bar"><span style="width:65%"></span></div><span class="muted mono">≈ 9 min restantes (estimation)</span></div></div>
+        <div class="step"><span class="st wait">3</span><div class="col" style="gap:3px"><b class="muted">Détail des pièces jointes</b><span class="muted">En attente · messages de plus de 1 Mo</span></div></div>
+        <div class="row" style="margin-top:12px"><span class="n">2</span><div class="callout grow">Gmail demande de ralentir. Reprise automatique dans <b class="mono">6 s</b>.</div></div>
+        <div class="row" style="margin-top:12px"><span class="btn">Mettre en pause</span><span class="btn ghost">Annuler le scan</span></div>
+      </div>
+      <div class="col">
+        <div class="row"><span class="n">3</span><span class="lbl">Déjà lu</span></div>
+        <div class="stats">
+          <div class="stat"><span class="lbl">Messages lus</span><b class="mono">11 960</b><span class="hint mono">sur 18 410</span></div>
+          <div class="stat"><span class="lbl">Volume lu</span><b class="mono">3,1 Go</b><span class="hint">taille des messages lus</span></div>
+          <div class="stat"><span class="lbl">Adresses e-mail</span><b class="mono">2 384</b><span class="hint">identifiées, dont 612 domaines</span></div>
+          <div class="stat"><span class="lbl">Libellés parcourus</span><b class="mono">14</b><span class="hint mono">sur 23</span></div>
+          <div class="stat"><span class="lbl">Conversations</span><b class="mono">4 020</b><span class="hint mono">sur 6 230</span></div>
+          <div class="stat"><span class="lbl">Pièces jointes</span><b class="mono muted">—</b><span class="hint">à l'étape 3</span></div>
+        </div>
+        <div class="row"><span class="n">4</span><span class="grow hint">Le treemap s'ouvre sur ce qui est déjà en base, avec un bandeau « scan en cours ».</span><span class="btn">Explorer les résultats partiels</span></div>
+        </div>
+        <div class="row"><span class="n">5</span><span class="hint">Un scan interrompu (serveur redémarré, autorisation expirée) reprend où il s'était arrêté.</span></div>
+      </div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><span class="n">1</span><span><b>Le périmètre est rappelé</b> en titre, pour savoir ce qui est en train d'être lu.</span></li>
+    <li><span class="n">2</span><span><b>Limites Gmail visibles</b> mais rassurantes : le serveur patiente et reprend seul, rien à faire.</span></li>
+    <li><span class="n">3</span><span><b>Statistiques en direct :</b> messages lus et leur volume, adresses e-mail identifiées, libellés parcourus, conversations. Les pièces jointes s'ajoutent à l'étape 3.</span></li>
+    <li><span class="n">4</span><span><b>Explorer sans attendre :</b> le treemap s'ouvre sur les résultats partiels, avec un bandeau « scan en cours ».</span></li>
+    <li><span class="n">5</span><span><b>Reprise</b> après interruption, sans repartir de zéro.</span></li>
+  </ol>
+</section>
+
+<!-- 4. VUE PRINCIPALE -->
+<section class="screen" id="vue">
+  <div class="screen-head"><span class="eyebrow">Écran 4</span><h2>Vue principale</h2>
+    <p class="muted">Filtres à gauche, treemap au centre, détail à droite, actions en bas. Les briques sont cliquables pour voir le panneau de détail réagir.</p></div>
+  <div class="scroller"><div class="wf" style="min-width:1120px">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">http://serveur.local:8080/gmail</span></div>
+    <div class="topbar">
+      <span class="logo">Gmail Drive Stat</span>
+      <div class="tabs"><span class="tab on">Gmail</span><span class="tab off">Drive · bientôt</span></div>
+      <span class="grow"></span>
+      <span class="n">1</span>
+      <div class="quota"><div class="row" style="justify-content:space-between;font-size:12px"><span>12,9 Go sur 15 Go</span><span class="muted">86 %</span></div>
+        <div class="bar"><span style="width:62%"></span><span style="width:16%"></span><span style="width:8%"></span></div>
+        <div class="legend" style="font-size:11px;gap:2px 10px"><span><i class="sw" style="background:var(--ink)"></i>Gmail 9,3</span><span><i class="sw" style="background:var(--muted)"></i>Drive 2,4</span><span><i class="sw" style="background:var(--fill2)"></i>Photos 1,2</span></div></div>
+      <span class="muted">vous@gmail.com</span>
+    </div>
+    <div class="scopebar">
+      <span class="n">2</span>
+      <span class="lbl">Périmètre</span><span class="chip">2019 → aujourd'hui</span><span class="chip">tous libellés</span><span class="chip">messages ≥ 1 Mo</span>
+      <span class="muted">· 6 230 conversations · 7,8 Go sur 9,3 Go de Gmail</span>
+      <span class="grow"></span><span class="muted">Dernière synchro il y a 2 h</span><span class="btn">↻ Actualiser</span>
+    </div>
+    <div class="main">
+      <aside class="filters">
+        <div class="row"><span class="n">3</span><span class="lbl grow">Filtres</span><span class="muted" style="font-size:12px">Tout effacer</span></div>
+        <div class="axis"><div class="axis-h">Période <span class="muted">actif</span></div><div class="row"><span class="input">01/2019</span>→<span class="input">12/2024</span></div></div>
+        <div class="axis"><div class="axis-h">Libellés <span class="muted">▸</span></div></div>
+        <div class="axis"><div class="axis-h">Expéditeur <span class="muted">▸</span></div></div>
+        <div class="axis"><div class="axis-h">Domaine <span class="muted">▾</span></div><span class="input">Rechercher…</span>
+          <div class="row" style="font-size:12px"><span class="check"></span><span class="grow">amazon.fr</span><span class="mono muted">812 Mo</span></div>
+          <div class="row" style="font-size:12px"><span class="check"></span><span class="grow">gmail.com</span><span class="mono muted">2,1 Go</span></div>
+          <div class="row" style="font-size:12px"><span class="check"></span><span class="grow">sncf-connect.com</span><span class="mono muted">96 Mo</span></div>
+        </div>
+        <div class="axis"><div class="axis-h">Liste de diffusion <span class="muted">▸</span></div></div>
+        <div class="axis"><div class="axis-h">Groupe À / Cc <span class="muted">▸</span></div></div>
+        <div class="axis"><div class="axis-h">Nombre de PJ <span class="muted">▾</span></div><div class="row" style="flex-wrap:wrap;gap:4px"><span class="chip">0</span><span class="chip">1</span><span class="chip">2–5</span><span class="chip">6+</span></div></div>
+        <div class="axis"><div class="axis-h">Type de PJ <span class="muted">▸</span></div></div>
+        <div class="axis"><div class="axis-h">Catégorie Gmail <span class="muted">▸</span></div></div>
+        <div class="axis"><div class="axis-h">Taille min. conversation</div><div class="row"><span class="input">5 Mo</span><span class="ph grow"></span></div></div>
+      </aside>
+      <div class="center">
+        <div class="row" style="flex-wrap:wrap">
+          <span class="n">4</span><span class="lbl">Niveaux</span>
+          <div class="levels"><span class="level">Année</span>›<span class="level">Trimestre</span>›<span class="level">Domaine</span><span class="btn ghost" style="padding:1px 8px">+ niveau</span></div>
+          <span class="grow"></span><span class="n">11</span><div class="seg" role="group" aria-label="Affichage"><button type="button" class="on" data-v="tm" aria-pressed="true">Treemap</button><button type="button" data-v="list" aria-pressed="false">Liste triée</button></div><span class="input">Préréglage : Par période ▾</span>
+        </div>
+        <div class="row" style="flex-wrap:wrap;gap:6px"><span class="n">5</span><span class="crumbs">Tout › <b>2019 – 2024</b></span><span class="muted">·</span><span class="chip on">Période 2019–2024 ×</span><span class="chip on">≥ 5 Mo ×</span></div>
+        <div style="position:relative">
+          <span class="n pin" style="left:-16px;top:-10px">6</span>
+          <span class="n pin" style="right:196px;top:-10px">7</span>
+          <div class="tm-wrap">
+            <div class="tm" id="tm" role="img" aria-label="Treemap fictif : années, trimestres, domaines et conversations"></div>
+            <div class="list" id="list" hidden><table><thead><tr><th data-k="subj">Conversation</th><th data-k="dom">Domaine</th><th data-k="ts">Dernier msg</th><th data-k="msg" class="num">Msgs</th><th>PJ</th><th data-k="v" class="num on">Taille ▼</th></tr></thead><tbody id="list-body"></tbody></table></div>
+            <div class="zone" id="z-sent"><div class="th"><div class="row"><b class="zt">Envoyés</b><button class="fold" type="button" aria-expanded="true" aria-label="Replier la zone Envoyés">›</button></div><span class="muted mono">1,3 Go</span><span class="muted">libellé Sent</span><span class="vt">Envoyés · 1,3 Go</span></div><div class="tb" id="sent"></div></div>
+            <div class="zone" id="z-trash"><div class="th"><div class="row"><b class="zt">Corbeille</b><button class="fold" type="button" aria-expanded="true" aria-label="Replier la zone Corbeille">›</button></div><span class="muted mono">412 Mo</span><span class="muted">vidée sous 30 j</span><span class="vt">Corbeille · 412 Mo</span></div><div class="tb" id="trash"></div></div>
+          </div>
+        </div>
+        <div class="row"><span class="n">8</span><div class="legend" id="legend"></div></div>
+      </div>
+      <aside class="detail">
+        <div class="row"><span class="n">9</span><span class="lbl">Conversation</span></div>
+        <h3 id="d-subj" style="font-size:14px">Votre commande de 3 articles</h3>
+        <dl class="kv">
+          <dt>Domaine</dt><dd id="d-dom">amazon.fr</dd>
+          <dt>Dernier msg</dt><dd id="d-date" class="mono">14/08/2023</dd>
+          <dt>Messages</dt><dd id="d-msg" class="mono">4</dd>
+          <dt>Taille</dt><dd id="d-size" class="mono"><b>24,6 Mo</b></dd>
+          <dt>Libellé</dt><dd id="d-lab">Achats</dd>
+          <dt>Catégorie</dt><dd id="d-cat">Notifications</dd>
+        </dl>
+        <div class="col" style="gap:5px"><span class="lbl">Pièces jointes</span><div id="d-att" class="col" style="gap:5px"></div></div>
+        <span class="btn" style="align-self:flex-start">Sélectionner toute la conversation</span>
+        <span class="hint" style="margin-top:-6px">Ajoute les messages envoyés de cette conversation (zone Envoyés).</span>
+        <span class="btn ghost" style="align-self:flex-start">Ouvrir dans Gmail ↗</span>
+        <div class="box col" style="padding:10px;gap:6px;margin-top:auto">
+          <span class="lbl">Bloc parent</span>
+          <span style="font-size:12.5px"><b id="d-block">amazon.fr · 2023 T3</b></span>
+          <span class="muted mono" style="font-size:12px" id="d-blockv">9 conversations · 118 Mo</span>
+          <span class="btn" style="align-self:flex-start">Sélectionner tout le bloc</span>
+        </div>
+      </aside>
+    </div>
+    <div class="msgs">
+      <div class="row"><span class="n">12</span><span class="lbl grow">E-mails de la sélection</span><span class="muted mono" id="msgs-sum"></span></div>
+      <div class="list"><table><thead><tr><th>De</th><th>À</th><th>Objet</th><th class="num">PJ</th><th class="num">Poids</th></tr></thead><tbody id="msgs-body"></tbody></table></div>
+    </div>
+    <div class="actionbar">
+      <span class="n">10</span>
+      <div class="target"><b id="sel-count">Sélection : 1 conversation · 24,6 Mo</b><span class="btn ghost" style="padding:2px 8px">Tout sélectionner (214)</span><span class="btn ghost" style="padding:2px 8px">Vider la sélection</span></div>
+      <span class="grow"></span>
+      <span class="btn">Archiver</span><span class="btn">Marquer lu</span><span class="btn">Marquer non lu</span>
+      <span class="sep"></span>
+      <span class="btn danger">Corbeille</span><span class="btn danger solid">Supprimer définitivement</span>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><span class="n">1</span><span><b>Jauge de quota</b> du compte, ventilée Gmail, Drive et Photos. La source exacte des chiffres est à vérifier dans l'API Google.</span></li>
+    <li><span class="n">2</span><span><b>Périmètre toujours visible,</b> avec la part de Gmail réellement couverte et le bouton Actualiser qui rouvre l'écran 2.</span></li>
+    <li><span class="n">3</span><span><b>Un filtre par axe,</b> neuf axes plus la taille minimale. Chaque filtre se replie, et indique « actif » quand il restreint la vue.</span></li>
+    <li><span class="n">4</span><span><b>Niveaux du treemap</b> réordonnables par glisser-déposer, n'importe quel axe pouvant devenir un niveau. Par défaut : année, trimestre, domaine.</span></li>
+    <li><span class="n">5</span><span><b>Fil d'Ariane et filtres actifs</b> en pastilles supprimables, au-dessus du treemap.</span></li>
+    <li><span class="n">6</span><span><b>Treemap des messages reçus :</b> une brique par conversation, taille = poids de ses messages reçus, couleur = type de la plus grosse pièce jointe, gris sans pièce jointe. Double-clic sur un bloc pour zoomer.</span></li>
+    <li><span class="n">7</span><span><b>Zones Envoyés et Corbeille</b> à part, chacune repliable (bouton ›). Envoyés contient les messages que vous avez envoyés (libellé Sent), regroupés par conversation ; le treemap principal ne montre que les messages reçus. La corbeille, hachurée, compte encore dans le quota jusqu'à son vidage.</span></li>
+    <li><span class="n">8</span><span><b>Légende des couleurs,</b> qui sert aussi de raccourci vers le filtre Type de PJ.</span></li>
+    <li><span class="n">9</span><span><b>Panneau de détail</b> de la brique cliquée. Une action ne touche que la sélection, c'est-à-dire les messages de la brique cliquée. Pour l'étendre : « Sélectionner toute la conversation » ajoute ses messages envoyés, « Sélectionner tout le bloc » prend tout un domaine ou un trimestre.</span></li>
+    <li><span class="n">10</span><span><b>Barre d'actions :</b> les actions ne portent que sur la sélection. « Tout sélectionner » prend toutes les briques visibles avec les filtres en cours. Les actions destructrices sont séparées et en rouge.</span></li>
+    <li><span class="n">11</span><span><b>Bascule d'affichage :</b> treemap ou liste triée, l'un à la place de l'autre. La liste reprend les mêmes filtres, se trie par colonne (taille par défaut) et alimente le même panneau de détail et la même sélection. Essayez la bascule.</span></li>
+    <li><span class="n">12</span><span><b>E-mails de la sélection :</b> la liste apparaît dès qu'une conversation est sélectionnée, entre la zone principale et la barre d'actions. Elle montre les e-mails de la brique : reçus pour le treemap, envoyés pour la zone Envoyés. Une ligne par e-mail : De, À, Objet, nombre de pièces jointes, poids. Avec plusieurs conversations sélectionnées, les e-mails sont regroupés par conversation.</span></li>
+  </ol>
+</section>
+
+<!-- 5. CONFIRMATION -->
+<section class="screen" id="confirmation">
+  <div class="screen-head"><span class="eyebrow">Écran 5</span><h2>Confirmation de nettoyage</h2>
+    <p class="muted">Corbeille et suppression définitive n'ont pas le même niveau de friction.</p></div>
+  <div class="scroller"><div class="wf">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">http://serveur.local:8080/gmail</span></div>
+    <div class="dim">
+      <div class="modal">
+        <div class="mh"><span class="n">1</span>Mettre 214 conversations à la corbeille ?</div>
+        <div class="mb">
+          <div class="mini"><span>Conversations</span><span class="mono">214</span><span>Messages</span><span class="mono">1 032</span><span>Espace concerné</span><span class="mono"><b>1,9 Go</b></span></div>
+          <div class="callout">L'espace n'est libéré qu'au vidage de la corbeille Gmail, sous 30 jours. Vous pourrez restaurer d'ici là.</div>
+          <span class="hint">Cible : les 214 conversations sélectionnées</span>
+        </div>
+        <div class="mf"><span class="btn ghost">Annuler</span><span class="btn danger">Mettre à la corbeille</span></div>
+      </div>
+      <div class="modal danger">
+        <div class="mh"><span class="n">2</span>Supprimer définitivement 214 conversations</div>
+        <div class="mb">
+          <div class="mini"><span>Conversations</span><span class="mono">214</span><span>Espace libéré immédiatement</span><span class="mono"><b>1,9 Go</b></span></div>
+          <div class="col" style="gap:4px"><span class="lbl">Les plus grosses</span>
+            <div class="mini muted"><span>Photos vacances Crète (12 PJ)</span><span class="mono">212 Mo</span><span>Facture et notice TV</span><span class="mono">48 Mo</span><span>… et 212 autres</span><span class="mono">Voir la liste</span></div></div>
+          <div class="callout warn"><b>Irréversible.</b> Gmail ne propose aucune restauration après une suppression définitive.</div>
+          <div class="field"><span class="n" style="align-self:flex-start">3</span><span>Pour confirmer, saisissez le nombre de conversations : <b class="mono">214</b></span><span class="input">_</span></div>
+        </div>
+        <div class="mf"><span class="btn ghost">Annuler</span><span class="btn danger solid disabled">Supprimer définitivement</span></div>
+      </div>
+    </div>
+  </div></div>
+  <ol class="notes">
+    <li><span class="n">1</span><span><b>Corbeille :</b> une confirmation simple, avec le rappel que l'espace n'est pas libéré tout de suite.</span></li>
+    <li><span class="n">2</span><span><b>Suppression définitive :</b> fenêtre rouge, aperçu des plus grosses conversations et lien vers la liste complète.</span></li>
+    <li><span class="n">3</span><span><b>Confirmation renforcée :</b> le bouton reste grisé tant que le bon nombre n'est pas saisi. Archiver et Lu/Non lu ne demandent aucune confirmation.</span></li>
+  </ol>
+</section>
+
+<!-- 6. RÉSULTAT -->
+<section class="screen" id="resultat">
+  <div class="screen-head"><span class="eyebrow">Écran 6</span><h2>Résultat du nettoyage</h2>
+    <p class="muted">Le treemap ne bouge qu'au rythme des confirmations de Gmail, conversation par conversation.</p></div>
+  <div class="scroller"><div class="wf narrow">
+    <div class="chrome"><i></i><i></i><i></i><span class="url">http://serveur.local:8080/gmail</span></div>
+    <div style="padding:20px 20px 90px; background:var(--fill); display:grid; grid-template-columns: minmax(0,1fr) 260px; gap:18px">
+      <div class="box col" style="padding:14px; gap:10px">
+        <div class="row"><span class="n">1</span><b class="grow">Mise à la corbeille en cours</b><span class="mono">168 / 214</span></div>
+        <div class="bar"><span style="width:78%"></span></div>
+        <div class="mini"><span>Traitées par Gmail</span><span class="mono">166</span><span style="color:var(--danger)">Échecs</span><span class="mono" style="color:var(--danger)">2</span><span class="muted">Restantes</span><span class="mono muted">46</span></div>
+        <div class="row"><span class="n">2</span><span class="hint">Les briques traitées glissent vers la zone corbeille. Les échecs restent en place, encadrés de rouge.</span></div>
+      </div>
+      <div class="box col" style="padding:14px; gap:8px">
+        <div class="row"><span class="n">3</span><span class="lbl">Échecs</span></div>
+        <div class="mini" style="font-size:12px"><span>Relevé banque mars</span><span class="mono">Réessayer</span><span>Billet Lyon–Paris</span><span class="mono">Réessayer</span></div>
+        <span class="hint">Gmail a refusé l'opération. Motif affiché au survol.</span>
+      </div>
+    </div>
+    <div class="toast"><span class="n" style="background:var(--surface);color:var(--ink);box-shadow:none">4</span><span>212 conversations mises à la corbeille · 2 échecs</span><u>Restaurer</u><u>Voir les échecs</u></div>
+  </div></div>
+  <ol class="notes">
+    <li><span class="n">1</span><span><b>Progression</b> du lot, qui continue sur le serveur même si l'onglet est fermé.</span></li>
+    <li><span class="n">2</span><span><b>Gmail d'abord, base ensuite :</b> la vue reflète ce qui a réellement été fait sur le compte.</span></li>
+    <li><span class="n">3</span><span><b>Échecs listés</b> avec une action Réessayer par conversation.</span></li>
+    <li><span class="n">4</span><span><b>Notification finale</b> avec Restaurer pour la corbeille (absent pour la suppression définitive).</span></li>
+  </ol>
+</section>
+
+<!-- QUESTIONS -->
+<section class="screen" id="questions">
+  <div class="screen-head"><span class="eyebrow">À trancher</span><h2>Questions d'ergonomie</h2>
+    <p class="muted">Chaque question se règle d'un mot. La maquette suit déjà l'option recommandée.</p></div>
+  <div class="qs">
+    <div class="q"><span class="qn">Q1</span><h3>Comment naviguer dans le treemap ?</h3>
+      <div class="opts"><span class="opt reco">Imbriqué + zoom</span><span class="opt">Un niveau à la fois</span><span class="chip on">Tranché par Victor : imbriqué + zoom</span></div>
+      <p>Imbriqué : on voit tous les niveaux à la fois comme WinDirStat, et un double-clic zoome sur un bloc. Un niveau à la fois est plus lisible mais on perd la vue d'ensemble.</p></div>
+    <div class="q"><span class="qn">Q2</span><h3>Faut-il une liste triable en plus du treemap ?</h3>
+      <div class="opts"><span class="opt">Oui, à côté</span><span class="opt">Non</span><span class="opt reco">Bascule treemap ou liste</span><span class="chip on">Tranché par Victor : on choisit l'un ou l'autre</span></div>
+      <p>Un bouton bascule la zone centrale entre treemap et liste triée. Les filtres, la sélection et le panneau de détail restent communs aux deux.</p></div>
+    <div class="q"><span class="qn">Q3</span><h3>Sur quoi portent les actions par défaut ?</h3>
+      <div class="opts"><span class="opt">Choix explicite</span><span class="opt reco">Toujours la sélection</span><span class="opt">Toujours le filtré</span><span class="chip on">Tranché par Victor : la sélection</span></div>
+      <p>Les actions portent uniquement sur les conversations sélectionnées. Pour agir sur tout ce qui est filtré, on clique sur « Tout sélectionner ».</p></div>
+    <div class="q"><span class="qn">Q4</span><h3>Comment sélectionner plusieurs briques ?</h3>
+      <div class="opts"><span class="opt reco">Ctrl+clic et bloc entier</span><span class="opt">Lasso</span><span class="chip on">Tranché par Victor : Ctrl+clic et bloc entier</span></div>
+      <p>Ctrl+clic ajoute une brique, le bouton « Sélectionner tout le bloc » prend un domaine ou un trimestre. Le lasso est plus long à construire sur un treemap.</p></div>
+    <div class="q"><span class="qn">Q5</span><h3>Où montrer la corbeille et les envoyés ?</h3>
+      <div class="opts"><span class="opt reco">Zones à côté, repliables</span><span class="opt">Dans le treemap</span><span class="opt">Onglet séparé</span><span class="chip on">Tranché par Victor : zones à côté, repliables, avec une zone Envoyés</span></div>
+      <p>Deux zones à droite du treemap, Envoyés (messages du libellé Sent) puis Corbeille, que l'on replie pour rendre la largeur au treemap. Le treemap principal ne garde que les messages reçus.</p></div>
+    <div class="q"><span class="qn">Q6</span><h3>Quelle confirmation pour la suppression définitive ?</h3>
+      <div class="opts"><span class="opt reco">Saisir le nombre</span><span class="opt">Taper SUPPRIMER</span><span class="opt">Case à cocher</span><span class="chip on">Tranché par Victor : saisir le nombre</span></div>
+      <p>Saisir le nombre de conversations oblige à lire ce qu'on supprime. Taper un mot fixe devient vite un réflexe.</p></div>
+    <div class="q"><span class="qn">Q7</span><h3>Peut-on explorer pendant le scan ?</h3>
+      <div class="opts"><span class="opt reco">Oui, résultats partiels</span><span class="opt">Non, attendre la fin</span><span class="chip on">Tranché par Victor : oui</span></div>
+      <p>Avec un bandeau « scan en cours ». Le nettoyage pourrait rester désactivé tant que le scan n'est pas fini, pour éviter d'agir sur des chiffres incomplets.</p></div>
+    <div class="q"><span class="qn">Q8</span><h3>Les filtres : panneau à gauche ou barre en haut ?</h3>
+      <div class="opts"><span class="opt reco">Panneau repliable</span><span class="opt">Barre en haut</span><span class="chip on">Tranché par Victor : panneau repliable</span></div>
+      <p>Neuf axes plus la taille tiennent mal dans une barre. Le panneau se replie pour donner toute la largeur au treemap.</p></div>
+    <div class="q"><span class="qn">Q9</span><h3>Quelle place pour le téléphone ?</h3>
+      <div class="opts"><span class="opt reco">Ordinateur d'abord</span><span class="opt">Adapté au mobile dès la v1</span><span class="chip on">Tranché par Victor : ordinateur d'abord</span></div>
+      <p>Un treemap dense se manipule mal au doigt. On garderait un affichage correct sur mobile pour consulter, sans viser le confort.</p></div>
+    <div class="q"><span class="qn">Q10</span><h3>Montrer le détail au survol ou au clic ?</h3>
+      <div class="opts"><span class="opt">Infobulle au survol, panneau au clic</span><span class="opt reco">Clic seulement</span><span class="chip on">Tranché par Victor : clic seulement</span></div>
+      <p>Pas d'infobulle : un clic sur une brique remplit le panneau de détail et la liste des e-mails.</p></div>
+  </div>
+</section>
+
+<footer>Maquette basse fidélité, données fictives. Établie d'après la feuille de route du projet au 6 octobre 2026.</footer>
+</div>
+
+<script>
+(function () {
+  // Générateur pseudo-aléatoire déterministe pour des données d'exemple stables
+  let s = 42; const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  const TYPES = [
+    { k: "none", label: "Sans pièce jointe", c: "--t-none", p: .58 },
+    { k: "img", label: "Image", c: "--t-img", p: .16 },
+    { k: "pdf", label: "PDF", c: "--t-pdf", p: .12 },
+    { k: "doc", label: "Bureautique", c: "--t-doc", p: .07 },
+    { k: "vid", label: "Vidéo", c: "--t-vid", p: .05 },
+    { k: "zip", label: "Archive", c: "--t-zip", p: .04 },
+    { k: "aud", label: "Audio", c: "--t-aud", p: .03 },
+    { k: "oth", label: "Autre", c: "--t-oth", p: .03 },
+  ];
+  const ext = { img: ["IMG_2481.jpg", "photo.heic"], pdf: ["facture.pdf", "contrat.pdf"], doc: ["budget.xlsx", "CR.docx"], vid: ["video_anniv.mp4", "clip.mov"], zip: ["photos.zip", "dossier.7z"], aud: ["message.m4a", "memo.mp3"], oth: ["invitation.ics", "plan.dwg"] };
+  const DOMS = [
+    ["gmail.com", ["Photos du week-end", "Re: vacances en Crète", "Les vidéos de la fête", "Papiers maison"]],
+    ["amazon.fr", ["Votre commande de 3 articles", "Facture et notice TV", "Retour accepté"]],
+    ["sncf-connect.com", ["Billet Lyon–Paris", "Votre e-billet", "Confirmation de voyage"]],
+    ["free.fr", ["Votre facture Freebox", "Message vocal reçu"]],
+    ["impots.gouv.fr", ["Avis d'imposition", "Accusé de réception"]],
+    ["linkedin.com", ["Nouvelles offres", "Vous avez 4 invitations"]],
+    ["leboncoin.fr", ["Nouveau message", "Votre annonce est en ligne"]],
+    ["ameli.fr", ["Relevé de remboursements", "Attestation"]],
+    ["github.com", ["[repo] Nouvelle issue", "Security alert"]],
+    ["outlook.fr", ["Re: projet maison", "Plans de la cuisine"]],
+  ];
+  const LABELS = ["Boîte de réception", "Achats", "Famille", "Administratif", "Voyages", "Envoyés"];
+  const CATS = ["Principale", "Promotions", "Réseaux sociaux", "Notifications", "Forums"];
+  function pickType() { let r = rnd(), a = 0; for (const t of TYPES) { a += t.p; if (r < a) return t; } return TYPES[0]; }
+  function fmt(mb) { return mb >= 1024 ? (mb / 1024).toFixed(1).replace(".", ",") + " Go" : (mb >= 10 ? Math.round(mb) : mb.toFixed(1).replace(".", ",")) + " Mo"; }
+  function conv(dom, year, q) {
+    const t = pickType();
+    const mb = t.k === "none" ? 5 + rnd() * 14 : t.k === "vid" ? 30 + rnd() * 160 : 5 + Math.pow(rnd(), 2) * 60;
+    const nAtt = t.k === "none" ? 0 : 1 + Math.floor(rnd() * 5);
+    const atts = []; let left = mb * .9;
+    for (let i = 0; i < nAtt; i++) { const tt = i === 0 ? t : TYPES[1 + Math.floor(rnd() * 3)]; const sz = i === 0 ? left * .7 : left * .3 / (nAtt - 1); atts.push({ n: ext[tt.k][Math.floor(rnd() * 2)], t: tt, mb: sz }); }
+    const m = q * 3 - Math.floor(rnd() * 3);
+    return { v: mb, t, dom: dom[0], subj: dom[1][Math.floor(rnd() * dom[1].length)], date: String(1 + Math.floor(rnd() * 28)).padStart(2, "0") + "/" + String(m).padStart(2, "0") + "/" + year, msg: 1 + Math.floor(rnd() * 9), lab: LABELS[Math.floor(rnd() * LABELS.length)], cat: CATS[Math.floor(rnd() * CATS.length)], atts };
+  }
+  const tree = [];
+  for (let y = 2019; y <= 2024; y++) {
+    const qs = [];
+    for (let q = 1; q <= 4; q++) {
+      const ds = []; const pool = DOMS.slice().sort(() => rnd() - .5).slice(0, 3 + Math.floor(rnd() * 3));
+      for (const d of pool) { const n = 2 + Math.floor(rnd() * (d[0] === "gmail.com" ? 14 : 7)); const cs = []; for (let i = 0; i < n; i++) cs.push(conv(d, y, q)); ds.push({ name: d[0], kids: cs, block: d[0] + " · " + y + " T" + q }); }
+      qs.push({ name: "T" + q, kids: ds });
+    }
+    tree.push({ name: String(y), kids: qs });
+  }
+  const sum = n => n.kids ? (n.v = n.kids.reduce((a, k) => a + sum(k), 0)) : n.v;
+  tree.forEach(sum);
+
+  function squarify(items, x, y, w, h) {
+    const total = items.reduce((a, i) => a + i.v, 0), out = [];
+    if (!total || w <= 0 || h <= 0) return out;
+    const sc = w * h / total;
+    let rest = items.map(i => ({ i, a: i.v * sc })).sort((a, b) => b.a - a.a);
+    while (rest.length) {
+      const sh = Math.min(w, h);
+      const worst = r => { const t = r.reduce((a, e) => a + e.a, 0), mx = r[0].a, mn = r[r.length - 1].a; return Math.max(sh * sh * mx / (t * t), t * t / (sh * sh * mn)); };
+      const row = [rest[0]]; let k = 1;
+      while (k < rest.length && worst(row.concat(rest[k])) <= worst(row)) { row.push(rest[k]); k++; }
+      rest = rest.slice(k);
+      const t = row.reduce((a, e) => a + e.a, 0);
+      if (w >= h) { const cw = t / h; let cy = y; row.forEach(e => { const ch = e.a / cw; out.push({ n: e.i, x, y: cy, w: cw, h: ch }); cy += ch; }); x += cw; w -= cw; }
+      else { const rh = t / w; let cx = x; row.forEach(e => { const ew = e.a / rh; out.push({ n: e.i, x: cx, y, w: ew, h: rh }); cx += ew; }); y += rh; h -= rh; }
+    }
+    return out;
+  }
+
+  let selected = null;
+  function showDetail(c, block, el) {
+    if (selected) selected.classList.remove("sel");
+    selected = el; if (el) el.classList.add("sel");
+    const $ = id => document.getElementById(id);
+    $("d-subj").textContent = c.subj; $("d-dom").textContent = c.dom; $("d-date").textContent = c.date;
+    $("d-msg").textContent = c.msg; $("d-size").innerHTML = "<b>" + fmt(c.v) + "</b>"; $("d-lab").textContent = c.lab; $("d-cat").textContent = c.cat;
+    const a = $("d-att"); a.innerHTML = "";
+    if (!c.atts.length) a.innerHTML = '<span class="hint">Aucune · brique grise</span>';
+    c.atts.forEach(x => { const r = document.createElement("div"); r.className = "att"; r.innerHTML = '<i class="sw" style="background:var(' + x.t.c + ')"></i><span></span><span class="mono">' + fmt(x.mb) + "</span>"; r.children[1].textContent = x.n; a.appendChild(r); });
+    if (block) { $("d-block").textContent = block.block; $("d-blockv").textContent = block.kids.length + " conversations · " + fmt(block.v); }
+    $("sel-count").textContent = "Sélection : 1 conversation · " + fmt(c.v);
+    // Messages de la conversation (fictifs, déterministes)
+    let k = Math.floor(c.v * 1000) % 2147483646 + 1; const r2 = () => (k = (k * 16807) % 2147483647) / 2147483647;
+    const user = "vous@gmail.com", other = (c.dom === "gmail.com" ? "camille" : "contact") + "@" + c.dom;
+    const attTotal = c.atts.reduce((a, x) => a + x.mb, 0), base = (c.v - attTotal) / c.msg;
+    const holder = Math.floor(r2() * c.msg);
+    const mb = $("msgs-body"); mb.innerHTML = "";
+    for (let i = 0; i < c.msg; i++) {
+      const mine = false; // le treemap principal ne montre que les messages reçus
+      const n = i === holder ? c.atts.length : 0, w = base + (i === holder ? attTotal : 0);
+      const tr = document.createElement("tr");
+      tr.innerHTML = '<td></td><td></td><td></td><td class="num">' + n + '</td><td class="num">' + fmt(w) + "</td>";
+      tr.children[0].textContent = mine ? user : other; tr.children[1].textContent = mine ? other : user;
+      tr.children[2].textContent = (i ? "Re: " : "") + c.subj;
+      mb.appendChild(tr);
+    }
+    $("msgs-sum").textContent = c.msg + " e-mail" + (c.msg > 1 ? "s" : "") + " · " + fmt(c.v);
+  }
+
+  function render(host, nodes, depth, x, y, w, h, parent, first) {
+    const cls = ["y", "q", "d"];
+    squarify(nodes, x, y, w, h).forEach(r => {
+      const n = r.n;
+      if (n.kids) {
+        const el = document.createElement("div"); el.className = "node " + cls[depth];
+        Object.assign(el.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px" });
+        host.appendChild(el);
+        const head = (r.w > 34 && r.h > 30) ? 14 : 0;
+        if (head) { const l = document.createElement("div"); l.className = "nl"; l.textContent = depth === 0 ? n.name + " · " + fmt(n.v) : n.name; el.appendChild(l); }
+        const pad = depth === 2 ? 1 : 2;
+        render(el, n.kids, depth + 1, pad, head + pad, r.w - pad * 2 - 2, r.h - head - pad * 2 - 2, n, first);
+      } else {
+        const b = document.createElement("div"); b.className = "brick";
+        Object.assign(b.style, { left: r.x + "px", top: r.y + "px", width: Math.max(r.w, 1) + "px", height: Math.max(r.h, 1) + "px", backgroundColor: "var(" + n.t.c + ")" });
+        b.addEventListener("click", () => showDetail(n, parent, b));
+        host.appendChild(b);
+        if (!first.done && n.t.k === "img" && r.w > 20) { first.done = true; showDetail(n, parent, b); }
+      }
+    });
+  }
+
+  const tm = document.getElementById("tm"), tr = document.getElementById("trash"), se = document.getElementById("sent");
+  const trashItems = []; for (let i = 0; i < 14; i++) trashItems.push(conv(DOMS[Math.floor(rnd() * DOMS.length)], 2024, 4));
+  const sentItems = []; for (let i = 0; i < 18; i++) sentItems.push(conv(DOMS[0], 2023, 2));
+  function zone(host, items, cls, what) {
+    host.innerHTML = "";
+    squarify(items, 0, 0, host.clientWidth, host.clientHeight).forEach(r => {
+      const b = document.createElement("div"); b.className = "brick" + cls;
+      Object.assign(b.style, { left: r.x + "px", top: r.y + "px", width: r.w + "px", height: r.h + "px", backgroundColor: "var(" + r.n.t.c + ")", cursor: "default" });
+      host.appendChild(b);
+    });
+  }
+  function draw() {
+    tm.innerHTML = ""; selected = null;
+    render(tm, tree, 0, 0, 0, tm.clientWidth, tm.clientHeight, null, { done: false });
+    zone(se, sentItems, "", "Envoyé");
+    zone(tr, trashItems, " hatch", "Dans la corbeille");
+  }
+  document.querySelectorAll(".zone .fold").forEach(btn => btn.addEventListener("click", () => {
+    const z = btn.closest(".zone"), closed = z.classList.toggle("closed");
+    btn.textContent = closed ? "‹" : "›"; btn.setAttribute("aria-expanded", String(!closed));
+    btn.setAttribute("aria-label", (closed ? "Déplier" : "Replier") + " la zone " + z.querySelector(".zt").textContent);
+    setTimeout(draw, 0);
+  }));
+  // Liste triée : toutes les conversations à plat, avec leur bloc parent
+  const flat = [];
+  tree.forEach(y => y.kids.forEach(q => q.kids.forEach(d => d.kids.forEach(c => { c.parent = d; const [dd, mm, yy] = c.date.split("/"); c.ts = yy + mm + dd; flat.push(c); }))));
+  let sortK = "v", sortDir = -1;
+  const lb = document.getElementById("list-body"), listEl = document.getElementById("list");
+  function drawList() {
+    const rows = flat.slice().sort((a, b) => (a[sortK] > b[sortK] ? 1 : a[sortK] < b[sortK] ? -1 : 0) * sortDir).slice(0, 80);
+    const max = Math.max(...flat.map(c => c.v));
+    lb.innerHTML = "";
+    rows.forEach(c => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = '<td></td><td></td><td class="num"></td><td class="num"></td><td><i class="sw" style="background:var(' + c.t.c + ')"></i></td><td class="num"><span class="szbar" style="width:' + Math.round(c.v / max * 30) + 'px"></span>' + fmt(c.v) + "</td>";
+      tr.children[0].textContent = c.subj; tr.children[1].textContent = c.dom; tr.children[2].textContent = c.date; tr.children[3].textContent = c.msg;
+      tr.addEventListener("click", () => showDetail(c, c.parent, tr));
+      lb.appendChild(tr);
+    });
+  }
+  listEl.querySelectorAll("th[data-k]").forEach(th => th.addEventListener("click", () => {
+    const k = th.dataset.k;
+    sortDir = k === sortK ? -sortDir : (k === "v" || k === "ts" || k === "msg" ? -1 : 1); sortK = k;
+    listEl.querySelectorAll("th[data-k]").forEach(h => { h.classList.toggle("on", h === th); h.textContent = h.textContent.replace(/ [▲▼]$/, ""); });
+    th.textContent += sortDir < 0 ? " ▼" : " ▲";
+    drawList();
+  }));
+  document.querySelectorAll(".seg button").forEach(btn => btn.addEventListener("click", () => {
+    const isList = btn.dataset.v === "list";
+    document.querySelectorAll(".seg button").forEach(b => { b.classList.toggle("on", b === btn); b.setAttribute("aria-pressed", String(b === btn)); });
+    listEl.hidden = !isList; tm.hidden = isList;
+    if (isList) drawList(); else draw();
+  }));
+  const lg = document.getElementById("legend");
+  TYPES.forEach(t => { const sp = document.createElement("span"); sp.innerHTML = '<i class="sw" style="background:var(' + t.c + ')"></i>' + t.label; lg.appendChild(sp); });
+  draw();
+  let to; new ResizeObserver(() => { clearTimeout(to); to = setTimeout(draw, 120); }).observe(tm);
+})();
+</script>
+
+</body></html>
