@@ -1,0 +1,36 @@
+{
+  "name": "gmail-drive-stat",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WinDirStat pour Google : diagnostic et nettoyage de l'espace Gmail et Drive.",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "node --env-file=.env --import tsx --watch server/src/main.ts",
+    "dev:web": "vite",
+    "build": "npm run build:server && npm run build:web",
+    "build:server": "tsc -p server",
+    "build:web": "vite build",
+    "start": "node dist/server/main.js",
+    "check": "tsc -p server --noEmit && svelte-check --tsconfig ./web/tsconfig.json",
+    "test": "node --import tsx --test server/test/*.test.ts"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/static": "^10.1.5",
+    "fastify": "^5.12.5",
+    "google-auth-library": "^11.1.0"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
+    "@types/node": "^26.6.4",
+    "echarts": "^6.1.0",
+    "svelte": "^5.57.2",
+    "svelte-check": "^4.7.6",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.3"
+  }
+}
