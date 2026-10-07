@@ -4,6 +4,8 @@ import { buildApp } from './app.js';
 import { ConfigError, loadConfig } from './config.js';
 import { SecretBox } from './crypto.js';
 import { openDatabase } from './db.js';
+import { GmailScanner } from './gmail/scanner.js';
+import { GmailStore } from './gmail/store.js';
 import { createGoogleGateway } from './google.js';
 import { Store } from './store.js';
 
@@ -26,7 +28,10 @@ async function main(): Promise<void> {
   const db = openDatabase(config.databasePath);
   const store = new Store(db, new SecretBox(config.encryptionKey));
   const google = createGoogleGateway(config);
-  const app = await buildApp({ config, store, google, webRoot: findWebRoot() });
+  const gmail = new GmailStore(db);
+  const scanner = new GmailScanner(store, gmail, google);
+  const app = await buildApp({ config, store, gmail, scanner, google, webRoot: findWebRoot() });
+  scanner.setLogger(app.log);
 
   if (!google) {
     app.log.warn('GOOGLE_CLIENT_ID et GOOGLE_CLIENT_SECRET absents : l\'interface affiche le guide de première installation.');
@@ -34,6 +39,8 @@ async function main(): Promise<void> {
   app.log.info(`Adresse de retour à déclarer chez Google : ${config.redirectUri}`);
 
   const shutdown = async () => {
+    // Les scans s'arrêtent sans changer d'état : ils reprendront au prochain démarrage.
+    await scanner.shutdown();
     await app.close();
     db.close();
     process.exit(0);
@@ -42,6 +49,7 @@ async function main(): Promise<void> {
   process.once('SIGINT', shutdown);
 
   await app.listen({ port: config.port, host: '0.0.0.0' });
+  scanner.resumeInterrupted();
 }
 
 await main();

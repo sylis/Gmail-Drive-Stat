@@ -1,9 +1,12 @@
 import { CodeChallengeMethod, OAuth2Client } from 'google-auth-library';
 import type { Config } from './config.js';
 
-// Lot 1 : identité + lecture du quota. Les accès Gmail et Drive complets seront demandés par les lots suivants.
+// Lot 1 : identité + lecture du quota. Lot 2 : lecture de Gmail. Les accès en écriture arrivent avec le nettoyage.
 const DRIVE_METADATA_SCOPE = 'https://www.googleapis.com/auth/drive.metadata.readonly';
-export const SCOPES = ['openid', 'email', 'profile', DRIVE_METADATA_SCOPE];
+export const GMAIL_READ_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
+export const SCOPES = ['openid', 'email', 'profile', DRIVE_METADATA_SCOPE, GMAIL_READ_SCOPE];
+
+const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
 export interface GoogleTokens {
   refresh_token?: string | null;
@@ -28,17 +31,73 @@ export interface RawStorageQuota {
   usageInDriveTrash?: string;
 }
 
+export interface RawGmailPart {
+  mimeType?: string;
+  filename?: string;
+  headers?: { name: string; value: string }[];
+  body?: { size?: number; attachmentId?: string };
+  parts?: RawGmailPart[];
+}
+
+/** Message tel que le renvoie l'API Gmail, limité aux métadonnées : le corps n'est jamais demandé. */
+export interface RawGmailMessage {
+  id: string;
+  threadId: string;
+  labelIds?: string[];
+  sizeEstimate?: number;
+  internalDate?: string;
+  payload?: RawGmailPart;
+}
+
+export interface GmailApi {
+  profile(): Promise<{ messagesTotal: number; threadsTotal: number }>;
+  labels(): Promise<{ id: string; name: string; type: string }[]>;
+  listThreads(options: {
+    labelId?: string;
+    query?: string;
+    pageToken?: string;
+  }): Promise<{ threads: { id: string; historyId: string }[]; nextPageToken?: string }>;
+  /** Tous les messages de la conversation ; `detail` ajoute la structure des pièces jointes. */
+  getThread(id: string, detail: boolean): Promise<RawGmailMessage[]>;
+  /** Un message avec la structure de ses pièces jointes. */
+  getMessage(id: string): Promise<RawGmailMessage>;
+}
+
 /** Google a retiré l'autorisation (expiration du mode test, révocation) : l'utilisateur doit se reconnecter. */
 export class ReauthRequiredError extends Error {}
 
-/** L'utilisateur a décoché une autorisation nécessaire sur l'écran de consentement. */
+/** L'utilisateur a décoché une autorisation nécessaire sur l'écran de consentement, ou ne l'a pas encore accordée. */
 export class MissingScopeError extends Error {}
+
+/** Google demande de ralentir, ou a répondu par une erreur passagère : à retenter après une attente. */
+export class RetryLaterError extends Error {}
+
+/** L'élément n'existe plus sur le compte. */
+export class NotFoundError extends Error {}
+
+export type OnRefresh = (tokens: GoogleTokens) => void;
 
 export interface GoogleGateway {
   authUrl(options: { state: string; codeChallenge: string; forceConsent: boolean }): string;
   exchangeCode(code: string, codeVerifier: string): Promise<{ tokens: GoogleTokens; profile: GoogleProfile }>;
   revoke(tokens: GoogleTokens): Promise<void>;
-  storageQuota(tokens: GoogleTokens, onRefresh: (tokens: GoogleTokens) => void): Promise<RawStorageQuota>;
+  storageQuota(tokens: GoogleTokens, onRefresh: OnRefresh): Promise<RawStorageQuota>;
+  gmail(tokens: GoogleTokens, onRefresh: OnRefresh): GmailApi;
+}
+
+export const hasScope = (tokens: GoogleTokens | null, scope: string) => Boolean(tokens?.scope?.split(' ').includes(scope));
+
+// Structure des pièces jointes sans leur contenu : les parties s'emboîtent, on descend à une profondeur fixe.
+const PART_FIELDS = (depth: number): string =>
+  `mimeType,filename,body(size,attachmentId)${depth > 0 ? `,parts(${PART_FIELDS(depth - 1)})` : ''}`;
+const MESSAGE_FIELDS = (detail: boolean) =>
+  `id,threadId,labelIds,sizeEstimate,internalDate,payload(headers${detail ? `,${PART_FIELDS(6)}` : ''})`;
+const METADATA_HEADERS = ['From', 'To', 'Cc', 'Subject', 'List-Id', 'List-Unsubscribe'];
+
+function messageQuery(detail: boolean, wrap: (fields: string) => string): string {
+  const params = new URLSearchParams({ format: detail ? 'full' : 'metadata', fields: wrap(MESSAGE_FIELDS(detail)) });
+  if (!detail) for (const header of METADATA_HEADERS) params.append('metadataHeaders', header);
+  return params.toString();
 }
 
 export function createGoogleGateway(config: Config): GoogleGateway | null {
@@ -46,6 +105,28 @@ export function createGoogleGateway(config: Config): GoogleGateway | null {
   if (!credentials) return null;
 
   const newClient = () => new OAuth2Client({ ...credentials, redirectUri: config.redirectUri });
+
+  /** Client authentifié qui enregistre les jetons renouvelés et traduit les erreurs de Google. */
+  const session = (tokens: GoogleTokens, onRefresh: OnRefresh, requiredScope: string) => {
+    if (!hasScope(tokens, requiredScope)) throw new MissingScopeError(`Autorisation absente : ${requiredScope}`);
+    const client = newClient();
+    client.setCredentials(tokens);
+    client.on('tokens', (fresh) =>
+      onRefresh({
+        refresh_token: fresh.refresh_token ?? tokens.refresh_token,
+        access_token: fresh.access_token,
+        expiry_date: fresh.expiry_date,
+        scope: fresh.scope ?? tokens.scope,
+      }),
+    );
+    return async <T>(url: string): Promise<T> => {
+      try {
+        return (await client.request<T>({ url, retry: false })).data;
+      } catch (error) {
+        throw translateError(error);
+      }
+    };
+  };
 
   return {
     authUrl({ state, codeChallenge, forceConsent }) {
@@ -91,34 +172,68 @@ export function createGoogleGateway(config: Config): GoogleGateway | null {
     },
 
     async storageQuota(tokens, onRefresh) {
-      if (!tokens.scope?.split(' ').includes(DRIVE_METADATA_SCOPE)) {
-        throw new MissingScopeError("La lecture du quota Drive n'a pas été autorisée");
-      }
-      const client = newClient();
-      client.setCredentials(tokens);
-      client.on('tokens', (fresh) =>
-        onRefresh({
-          refresh_token: fresh.refresh_token ?? tokens.refresh_token,
-          access_token: fresh.access_token,
-          expiry_date: fresh.expiry_date,
-          scope: fresh.scope ?? tokens.scope,
-        }),
+      const get = session(tokens, onRefresh, DRIVE_METADATA_SCOPE);
+      const about = await get<{ storageQuota?: RawStorageQuota }>(
+        'https://www.googleapis.com/drive/v3/about?fields=storageQuota',
       );
-      try {
-        const response = await client.request<{ storageQuota?: RawStorageQuota }>({
-          url: 'https://www.googleapis.com/drive/v3/about',
-          params: { fields: 'storageQuota' },
-        });
-        return response.data.storageQuota ?? {};
-      } catch (error) {
-        if (isAuthFailure(error)) throw new ReauthRequiredError('Autorisation Google expirée ou révoquée');
-        throw error;
-      }
+      return about.storageQuota ?? {};
+    },
+
+    gmail(tokens, onRefresh) {
+      const get = session(tokens, onRefresh, GMAIL_READ_SCOPE);
+      return {
+        async profile() {
+          const profile = await get<{ messagesTotal?: number; threadsTotal?: number }>(`${GMAIL}/profile`);
+          return { messagesTotal: profile.messagesTotal ?? 0, threadsTotal: profile.threadsTotal ?? 0 };
+        },
+        async labels() {
+          const { labels = [] } = await get<{ labels?: { id: string; name: string; type?: string }[] }>(`${GMAIL}/labels`);
+          return labels.map((label) => ({ id: label.id, name: label.name, type: label.type ?? 'user' }));
+        },
+        async listThreads({ labelId, query, pageToken }) {
+          const params = new URLSearchParams({
+            maxResults: '500',
+            includeSpamTrash: 'true',
+            fields: 'threads(id,historyId),nextPageToken',
+          });
+          if (labelId) params.set('labelIds', labelId);
+          if (query) params.set('q', query);
+          if (pageToken) params.set('pageToken', pageToken);
+          const page = await get<{ threads?: { id: string; historyId: string }[]; nextPageToken?: string }>(
+            `${GMAIL}/threads?${params}`,
+          );
+          return { threads: page.threads ?? [], nextPageToken: page.nextPageToken };
+        },
+        async getThread(id, detail) {
+          const thread = await get<{ messages?: RawGmailMessage[] }>(
+            `${GMAIL}/threads/${encodeURIComponent(id)}?${messageQuery(detail, (fields) => `messages(${fields})`)}`,
+          );
+          return thread.messages ?? [];
+        },
+        getMessage(id) {
+          return get<RawGmailMessage>(`${GMAIL}/messages/${encodeURIComponent(id)}?${messageQuery(true, (fields) => fields)}`);
+        },
+      };
     },
   };
 }
 
-function isAuthFailure(error: unknown): boolean {
-  const response = (error as { response?: { status?: number; data?: { error?: unknown } } }).response;
-  return response?.status === 401 || response?.data?.error === 'invalid_grant';
+interface GoogleErrorBody {
+  error?: string | { status?: string; message?: string; errors?: { reason?: string }[] };
+}
+
+function translateError(error: unknown): unknown {
+  const response = (error as { response?: { status?: number; data?: GoogleErrorBody } }).response;
+  if (!response) return new RetryLaterError('Google est injoignable', { cause: error });
+  const { status, data } = response;
+  const detail = typeof data?.error === 'object' ? data.error : undefined;
+  const reason = `${detail?.errors?.[0]?.reason ?? ''} ${detail?.status ?? ''} ${detail?.message ?? ''}`;
+  if (status === 401 || data?.error === 'invalid_grant') return new ReauthRequiredError('Autorisation Google expirée ou révoquée');
+  if (status === 429 || (status === 403 && /rateLimit|quota|RESOURCE_EXHAUSTED/i.test(reason))) {
+    return new RetryLaterError('Google demande de ralentir');
+  }
+  if (status === 403 && /insufficient|scope/i.test(reason)) return new MissingScopeError('Autorisation Google insuffisante');
+  if (status === 404) return new NotFoundError('Élément introuvable');
+  if (status !== undefined && status >= 500) return new RetryLaterError(`Google a répondu ${status}`);
+  return error;
 }

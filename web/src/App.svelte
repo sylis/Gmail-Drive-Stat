@@ -1,7 +1,7 @@
 <script lang="ts">
   import { getStatus, type Status } from './lib/api';
   import Login from './Login.svelte';
-  import Overview from './Overview.svelte';
+  import Shell from './Shell.svelte';
 
   let status = $state<Status | null>(null);
   let unreachable = $state(false);
@@ -29,7 +29,7 @@
 {:else if status === null}
   <main class="center"><p class="muted">Chargement…</p></main>
 {:else if status.user && !status.needsReauth}
-  <Overview user={status.user} onchange={refresh} />
+  <Shell user={status.user} onchange={refresh} />
 {:else}
   <Login {status} onrefresh={refresh} />
 {/if}

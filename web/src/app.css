@@ -16,6 +16,16 @@
   --q-drive: #3a7fc2;
   --q-trash: #d3962a;
   --q-free: #a7adb8;
+  /* Couleur d'une brique : type de sa plus grosse pièce jointe. */
+  --t-img: #3e9e6b;
+  --t-vid: #8656e8;
+  --t-pdf: #d24f49;
+  --t-doc: #3a7fc2;
+  --t-zip: #d3962a;
+  --t-aud: #cf5c9c;
+  --t-oth: #3fa7a7;
+  --t-none: #a7adb8;
+  --t-unk: #cbbfa6;
   --f-display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
   --f-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --f-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
@@ -36,6 +46,8 @@
     --danger-soft: #4a231d;
     --ok: #5cc28a;
     --q-free: #5d6472;
+    --t-none: #5d6472;
+    --t-unk: #6b6250;
     color-scheme: dark;
   }
 }
@@ -143,4 +155,242 @@ code {
 :focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* Briques d'interface partagées par les écrans Gmail et Drive (formes reprises de la maquette). */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.lbl {
+  font: 500 11px/1.2 var(--f-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hint {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font: inherit;
+  font-size: 12.5px;
+  white-space: nowrap;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+button.chip {
+  cursor: pointer;
+}
+
+.chip.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.btn.small {
+  padding: 3px 10px;
+  font-size: 13px;
+  border-radius: 6px;
+}
+
+.btn.ghost {
+  color: var(--muted);
+}
+
+.btn.danger.solid {
+  background: var(--danger);
+  color: var(--surface);
+}
+
+.input {
+  font: 13px var(--f-body);
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  min-width: 0;
+}
+
+.sw {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  display: inline-block;
+  flex: none;
+}
+
+.bar-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--fill2);
+  overflow: hidden;
+}
+
+.bar-track > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.seg button {
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+  font: 500 13px var(--f-body);
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+.seg button + button {
+  border-left: 1px solid var(--line);
+}
+
+.seg button.on {
+  background: var(--ink);
+  color: var(--surface);
+}
+
+.table-wrap {
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+
+.table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.table-wrap th {
+  position: sticky;
+  top: 0;
+  background: var(--fill);
+  text-align: left;
+  font: 500 11px var(--f-mono);
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.table-wrap th button {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.table-wrap th.on {
+  color: var(--ink);
+}
+
+.table-wrap td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--fill);
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-wrap .num {
+  text-align: right;
+}
+
+.table-wrap td.num {
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.table-wrap tr.clickable {
+  cursor: pointer;
+}
+
+.table-wrap tr.clickable:hover {
+  background: var(--fill);
+}
+
+.table-wrap tr.sel {
+  background: var(--accent-soft);
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  overflow: auto;
+  background: color-mix(in srgb, var(--ink) 45%, transparent);
+}
+
+.modal {
+  width: min(100%, 560px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+}
+
+.modal > header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  font: 700 16px var(--f-display);
+}
+
+.modal > .body {
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal > footer {
+  padding: 12px 18px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }

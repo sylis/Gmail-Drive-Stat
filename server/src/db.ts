@@ -32,7 +32,119 @@ const MIGRATIONS: string[] = [
     created_at     INTEGER NOT NULL
   ) STRICT;
   `,
+  // Lot 2 : métadonnées Gmail. Tout est rattaché au compte et disparaît avec lui.
+  `
+  CREATE TABLE gmail_labels (
+    account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    id          TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    type        TEXT NOT NULL,
+    PRIMARY KEY (account_id, id)
+  ) STRICT, WITHOUT ROWID;
+
+  CREATE TABLE gmail_threads (
+    account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    id          TEXT NOT NULL,
+    history_id  TEXT NOT NULL,
+    scanned_at  INTEGER NOT NULL,
+    PRIMARY KEY (account_id, id)
+  ) STRICT, WITHOUT ROWID;
+
+  CREATE TABLE gmail_messages (
+    account_id   INTEGER NOT NULL,
+    id           TEXT NOT NULL,
+    thread_id    TEXT NOT NULL,
+    zone         TEXT NOT NULL,
+    size         INTEGER NOT NULL,
+    date         INTEGER NOT NULL,
+    from_addr    TEXT NOT NULL,
+    from_name    TEXT NOT NULL,
+    from_domain  TEXT NOT NULL,
+    rcpt         TEXT NOT NULL,
+    subject      TEXT NOT NULL,
+    list_id      TEXT NOT NULL,
+    labels       TEXT NOT NULL,
+    att_count    INTEGER,
+    PRIMARY KEY (account_id, id),
+    FOREIGN KEY (account_id, thread_id) REFERENCES gmail_threads(account_id, id) ON DELETE CASCADE
+  ) STRICT, WITHOUT ROWID;
+  CREATE INDEX gmail_messages_thread ON gmail_messages(account_id, thread_id);
+
+  CREATE TABLE gmail_attachments (
+    account_id  INTEGER NOT NULL,
+    message_id  TEXT NOT NULL,
+    idx         INTEGER NOT NULL,
+    name        TEXT NOT NULL,
+    type        TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    PRIMARY KEY (account_id, message_id, idx),
+    FOREIGN KEY (account_id, message_id) REFERENCES gmail_messages(account_id, id) ON DELETE CASCADE
+  ) STRICT, WITHOUT ROWID;
+  CREATE INDEX gmail_attachments_size ON gmail_attachments(account_id, size DESC);
+
+  CREATE TABLE gmail_bricks (
+    account_id  INTEGER NOT NULL,
+    thread_id   TEXT NOT NULL,
+    zone        TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    msgs        INTEGER NOT NULL,
+    date        INTEGER NOT NULL,
+    year        INTEGER NOT NULL,
+    quarter     INTEGER NOT NULL,
+    month       INTEGER NOT NULL,
+    domain      TEXT NOT NULL,
+    sender      TEXT NOT NULL,
+    label       TEXT NOT NULL,
+    category    TEXT NOT NULL,
+    list        TEXT NOT NULL,
+    rcpt        TEXT NOT NULL,
+    att_count   INTEGER,
+    att_bucket  TEXT NOT NULL,
+    att_type    TEXT NOT NULL,
+    subject     TEXT NOT NULL,
+    flagged     INTEGER NOT NULL,
+    PRIMARY KEY (account_id, thread_id, zone),
+    FOREIGN KEY (account_id, thread_id) REFERENCES gmail_threads(account_id, id) ON DELETE CASCADE
+  ) STRICT, WITHOUT ROWID;
+  CREATE INDEX gmail_bricks_size ON gmail_bricks(account_id, zone, size DESC);
+
+  CREATE TABLE gmail_scans (
+    id           INTEGER PRIMARY KEY,
+    account_id   INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    scope        TEXT NOT NULL,
+    status       TEXT NOT NULL,
+    step         TEXT NOT NULL,
+    cursor       TEXT NOT NULL,
+    stats        TEXT NOT NULL,
+    error        TEXT,
+    created_at   INTEGER NOT NULL,
+    updated_at   INTEGER NOT NULL,
+    finished_at  INTEGER
+  ) STRICT;
+  CREATE INDEX gmail_scans_account ON gmail_scans(account_id, id DESC);
+
+  CREATE TABLE gmail_scan_threads (
+    scan_id     INTEGER NOT NULL REFERENCES gmail_scans(id) ON DELETE CASCADE,
+    thread_id   TEXT NOT NULL,
+    history_id  TEXT NOT NULL,
+    done        INTEGER NOT NULL,
+    PRIMARY KEY (scan_id, thread_id)
+  ) STRICT, WITHOUT ROWID;
+  `,
 ];
+
+/** Exécute `work` dans une transaction, annulée si elle échoue. */
+export function transaction<T>(db: Db, work: () => T): T {
+  db.exec('BEGIN');
+  try {
+    const result = work();
+    db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
 
 export function openDatabase(path: string): Db {
   if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true });

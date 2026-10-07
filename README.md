@@ -2,7 +2,12 @@
 
 Outil de diagnostic de l'espace utilisé sur un compte Google, à la manière de WinDirStat : un treemap des e-mails Gmail (puis des fichiers Drive) pour repérer ce qui prend de la place et faire le ménage.
 
-État : **lot 1** livré (socle et vue globale). Le serveur tourne dans un conteneur Docker, on s'y connecte avec son compte Google, et il affiche la répartition du quota entre Gmail et Photos, Drive, la corbeille Drive et l'espace libre. Le scan Gmail arrive au lot 2.
+État : **lots 1 et 2** livrés. Le serveur tourne dans un conteneur Docker, on s'y connecte avec son compte Google, et il affiche :
+
+- la **vue globale** du quota : Gmail et Photos, Drive, corbeille Drive, espace libre ;
+- l'onglet **Gmail** : un scan en tâche de fond lit les métadonnées des conversations, puis un treemap les range par année, trimestre et domaine d'expéditeur (ou tout autre enchaînement de niveaux), avec filtres, liste triée et plus grosses pièces jointes.
+
+Le nettoyage (corbeille, suppression, archivage) arrive au lot 3, Drive au lot 4.
 
 ## Démarrage
 
@@ -31,9 +36,19 @@ Toute la configuration passe par le fichier `.env`, exclu de Git. Le serveur ref
 ### Accès et données
 
 - Il n'y a pas de mot de passe propre à l'outil : seule une connexion Google avec une adresse de `ALLOWED_EMAILS` ouvre l'interface.
-- Le lot 1 ne demande à Google que l'identité du compte et la lecture des métadonnées Drive (pour le quota). Les accès Gmail et Drive complets seront demandés par les lots suivants.
+- L'outil demande à Google l'identité du compte, la lecture des métadonnées Drive (pour le quota) et la lecture de Gmail (`gmail.readonly`). Après une mise à jour qui ajoute une autorisation, l'onglet concerné propose de se reconnecter pour l'accorder. Les accès en écriture seront demandés avec le nettoyage.
+- De Gmail, le serveur ne lit et ne conserve que des métadonnées : taille, date, expéditeur, destinataires, objet, libellés, liste de diffusion, nom, type et taille des pièces jointes. Le corps des messages et le contenu des pièces jointes ne sont jamais demandés à Google.
+- Ces métadonnées restent dans la base SQLite du volume Docker. « Retirer l'accès » les efface avec le compte.
 - Les jetons Google sont stockés chiffrés (AES-256-GCM) dans la base SQLite du volume Docker. Le bouton « Retirer l'accès » les révoque chez Google et efface le compte du serveur.
 - Google ne publie pas la taille de Gmail séparément de celle de Photos : la vue globale les montre ensemble jusqu'au scan Gmail.
+
+### Scan Gmail
+
+Avant chaque scan, vous choisissez le périmètre : période, libellés, taille minimale des messages, et détail des pièces jointes (messages de plus de 1 Mo, ou tous). Le scan tourne sur le serveur : on peut fermer l'onglet, il reprend où il s'était arrêté après un redémarrage du conteneur ou une reconnexion. Les scans se cumulent, et un nouveau scan ne relit que les conversations nouvelles ou modifiées.
+
+Le serveur se limite à 200 unités de quota Gmail par seconde (le plafond de Google est de 250 par utilisateur), soit une vingtaine de conversations par seconde : comptez environ une heure et demie pour 100 000 conversations. Quand Google demande de ralentir, le scan patiente et reprend seul.
+
+Dans le treemap, une brique est une conversation ; sa taille est celle de ses messages reçus, sa couleur le type de sa plus grosse pièce jointe. Les messages envoyés et la corbeille ont leur zone à côté. Un clic sur une brique affiche la conversation et ses e-mails, un clic sur l'en-tête d'un bloc (ou un double-clic dans le bloc) zoome dessus.
 
 ## Développement
 
@@ -44,6 +59,7 @@ npm install
 npm run dev       # serveur sur le port de .env, avec rechargement
 npm run dev:web   # interface sur http://localhost:5173, relayée vers le serveur
 npm test          # tests du serveur
+npm run demo      # l'outil complet sur un faux compte Google et une boîte fictive, sur http://localhost:8090
 npm run check     # vérification des types, serveur et interface
 ```
 
@@ -51,7 +67,8 @@ En développement, déclarez aussi `http://localhost:8080/auth/callback` chez Go
 
 | Dossier | Contenu |
 |---|---|
-| `server/` | Serveur TypeScript (Fastify) : configuration, connexion Google, base SQLite, API du quota |
+| `server/src/` | Serveur TypeScript (Fastify) : configuration, connexion Google, base SQLite, API du quota ; `gmail/` pour le scan et les requêtes du treemap |
+| `server/dev/` | Faux compte Google en mémoire, pour les tests et le mode démonstration |
 | `web/` | Interface Svelte, treemap ECharts |
 | `docs/` | Feuille de route et maquette |
 

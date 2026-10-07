@@ -1,9 +1,15 @@
 <script lang="ts">
-  import { ApiError, getQuota, logout, revokeAccount, type Quota, type QuotaPartKey, type Status } from './lib/api';
+  import { revokeAccount, type Quota, type QuotaPartKey } from './lib/api';
   import { formatBytes, formatPercent } from './lib/format';
   import QuotaTreemap from './QuotaTreemap.svelte';
 
-  let { user, onchange }: { user: NonNullable<Status['user']>; onchange: () => void } = $props();
+  let {
+    quota,
+    loading,
+    error,
+    onreload,
+    onchange,
+  }: { quota: Quota | null; loading: boolean; error: string | null; onreload: () => void; onchange: () => void } = $props();
 
   const PARTS: Record<QuotaPartKey, { label: string; colorVar: string; note: string }> = {
     gmailPhotos: {
@@ -20,9 +26,6 @@
     free: { label: 'Libre', colorVar: '--q-free', note: 'Espace encore disponible.' },
   };
 
-  let quota = $state<Quota | null>(null);
-  let loading = $state(false);
-  let error = $state<string | null>(null);
   let confirmRevoke = $state(false);
 
   const total = $derived(quota ? (quota.limit ?? quota.usage) : 0);
@@ -30,43 +33,11 @@
     (quota?.parts ?? []).map((part) => ({ ...PARTS[part.key], key: part.key, bytes: part.bytes })),
   );
 
-  async function load() {
-    loading = true;
-    error = null;
-    try {
-      quota = await getQuota();
-    } catch (cause) {
-      if (cause instanceof ApiError && cause.status === 401) return onchange();
-      error =
-        cause instanceof ApiError && cause.code === 'autorisation-incomplete'
-          ? 'La lecture du quota Drive n’a pas été autorisée sur l’écran de Google. Déconnectez-vous puis reconnectez-vous en cochant toutes les autorisations.'
-          : 'Google n’a pas répondu. Réessayez dans un instant.';
-    } finally {
-      loading = false;
-    }
-  }
-
-  async function signOut() {
-    await logout();
-    onchange();
-  }
-
   async function revoke() {
     await revokeAccount();
     onchange();
   }
-
-  load();
 </script>
-
-<header class="bar">
-  <h1>Gmail Drive Stat</h1>
-  <span class="who">
-    {#if user.picture}<img src={user.picture} alt="" referrerpolicy="no-referrer" />{/if}
-    <span class="muted">{user.email}</span>
-  </span>
-  <button class="btn" onclick={signOut}>Se déconnecter</button>
-</header>
 
 <main>
   <section class="card">
@@ -85,7 +56,7 @@
           </p>
         {/if}
       </div>
-      <button class="btn" onclick={load} disabled={loading}>{loading ? 'Lecture…' : 'Actualiser'}</button>
+      <button class="btn" onclick={onreload} disabled={loading}>{loading ? 'Lecture…' : 'Actualiser'}</button>
     </div>
 
     {#if error}
@@ -141,34 +112,6 @@
 </main>
 
 <style>
-  .bar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 16px;
-    padding: 12px 24px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--line);
-  }
-
-  .bar h1 {
-    font-size: 18px;
-    flex: 1;
-  }
-
-  .who {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .who img {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
-  }
-
   main {
     max-width: 980px;
     margin: 0 auto;
