@@ -1,15 +1,17 @@
 # Gmail Drive Stat
 
-Outil de diagnostic de l'espace utilisé sur un compte Google, à la manière de WinDirStat : un treemap des e-mails Gmail (puis des fichiers Drive) pour repérer ce qui prend de la place et faire le ménage.
+Outil de diagnostic de l'espace utilisé sur un compte Google, à la manière de WinDirStat : un treemap des e-mails Gmail et des fichiers Drive pour repérer ce qui prend de la place et faire le ménage.
 
-État : **lots 1 à 3** livrés. Le serveur tourne dans un conteneur Docker, on s'y connecte avec son compte Google, et il affiche :
+État : **lots 1 à 4** livrés. Le serveur tourne dans un conteneur Docker, on s'y connecte avec son compte Google, et il affiche :
 
 - la **vue globale** du quota : Gmail et Photos, Drive, corbeille Drive, espace libre ;
 - l'onglet **Gmail** : un scan en tâche de fond lit les métadonnées des conversations, puis un treemap les range par année, trimestre et domaine d'expéditeur (ou tout autre enchaînement de niveaux), avec filtres, liste triée et plus grosses pièces jointes.
 
 - le **nettoyage de Gmail** : on sélectionne des conversations dans le treemap ou la liste, puis on les met à la corbeille, on les supprime définitivement, on les archive ou on les marque lues ou non lues, avec simulation, suivi et journal.
 
-Drive arrive au lot 4.
+- l'onglet **Drive** : un scan lit la liste de vos fichiers, puis un treemap les range par dossier (ou par type), avec la liste des plus gros fichiers, la corbeille à côté, et le même nettoyage que pour Gmail (corbeille ou suppression définitive, simulation, suivi, journal).
+
+Restent le lot 5 (scans incrémentaux, historique, export) et Google Photos, hors périmètre pour l'instant.
 
 ## Démarrage
 
@@ -38,8 +40,9 @@ Toute la configuration passe par le fichier `.env`, exclu de Git. Le serveur ref
 ### Accès et données
 
 - Il n'y a pas de mot de passe propre à l'outil : seule une connexion Google avec une adresse de `ALLOWED_EMAILS` ouvre l'interface.
-- L'outil demande à Google l'identité du compte, la lecture des métadonnées Drive (pour le quota) et l'accès complet à Gmail (`https://mail.google.com/`), le seul qui permette la suppression définitive. Après une mise à jour qui ajoute une autorisation, l'onglet concerné propose de se reconnecter pour l'accorder ; d'ici là, la lecture continue de fonctionner et le nettoyage se limite à la simulation.
+- L'outil demande à Google l'identité du compte, la lecture des métadonnées Drive, l'accès complet à Gmail (`https://mail.google.com/`), le seul qui permette la suppression définitive, et l'accès complet à Drive (`https://www.googleapis.com/auth/drive`), nécessaire pour mettre un fichier à la corbeille ou le supprimer. Après une mise à jour qui ajoute une autorisation, l'onglet concerné propose de se reconnecter pour l'accorder ; d'ici là, la lecture continue de fonctionner et le nettoyage se limite à la simulation.
 - De Gmail, le serveur ne lit et ne conserve que des métadonnées : taille, date, expéditeur, destinataires, objet, libellés, liste de diffusion, nom, type et taille des pièces jointes. Le corps des messages et le contenu des pièces jointes ne sont jamais demandés à Google.
+- De Drive, il ne lit et ne conserve que la liste des fichiers : nom, dossier, type, taille comptée dans le quota, date de modification, partage. Le contenu des fichiers n'est jamais téléchargé.
 - Ces métadonnées restent dans la base SQLite du volume Docker. « Retirer l'accès » les efface avec le compte.
 - Les jetons Google sont stockés chiffrés (AES-256-GCM) dans la base SQLite du volume Docker. Le bouton « Retirer l'accès » les révoque chez Google et efface le compte du serveur.
 - Google ne publie pas la taille de Gmail séparément de celle de Photos : la vue globale les montre ensemble jusqu'au scan Gmail.
@@ -64,6 +67,14 @@ Dans le treemap, une brique est une conversation ; sa taille est celle de ses me
 
 Le nettoyage est indisponible pendant un scan, et inversement.
 
+### Drive
+
+Le scan de Drive lit toute la liste en quelques dizaines d'appels (1 000 fichiers par page) : pas de périmètre à choisir, « Actualiser » relit tout. Ne sont comptés que **les fichiers dont vous êtes propriétaire**, les seuls qui occupent votre quota ; ceux qu'on a partagés avec vous n'apparaissent pas et ne sont jamais proposés à la suppression. Les documents Google (Docs, Sheets, Slides) ne pèsent rien dans le quota : ils sont comptés mais n'ont pas de brique.
+
+- **Treemap par dossier**, comme WinDirStat : un clic sur l'en-tête d'un dossier zoome dessus, le fil d'Ariane remonte. Vos fichiers rangés dans le dossier partagé de quelqu'un d'autre sont regroupés sous « Dans des dossiers partagés ». La vue « Par type » regroupe par famille de fichiers.
+- **Nettoyage** : mêmes sélection, simulation, confirmation, suivi et journal que pour Gmail, avec deux actions, la corbeille (restaurable 30 jours) et la suppression définitive. Un fichier partagé avec d'autres ou suivi est signalé avant confirmation. La zone Corbeille se sélectionne d'un clic pour la vider. Les dossiers eux-mêmes ne sont pas supprimés, seulement leurs fichiers.
+- Drive supporte mal les écritures rapides : le nettoyage traite environ 4 fichiers par seconde.
+
 ## Développement
 
 Node.js 24 ou plus récent.
@@ -81,12 +92,12 @@ En développement, déclarez aussi `http://localhost:8080/auth/callback` chez Go
 
 | Dossier | Contenu |
 |---|---|
-| `server/src/` | Serveur TypeScript (Fastify) : configuration, connexion Google, base SQLite, API du quota ; `gmail/` pour le scan et les requêtes du treemap |
+| `server/src/` | Serveur TypeScript (Fastify) : configuration, connexion Google, base SQLite, quota, moteur de nettoyage commun ; `gmail/` et `drive/` pour le scan, les requêtes du treemap et le nettoyage de chaque service |
 | `server/dev/` | Faux compte Google en mémoire, pour les tests et le mode démonstration |
-| `web/` | Interface Svelte, treemap ECharts |
+| `web/` | Interface Svelte, treemap ECharts ; `gmail/`, `drive/` et `cleanup/` (écrans de nettoyage communs) |
 | `docs/` | Feuille de route et maquette |
 
 ## Documents
 
 - [Feuille de route](docs/feuille-de-route.md) : décisions prises, phases du projet et lots de développement.
-- [Maquette de l'interface](docs/maquette.html) : six écrans basse fidélité de la v1 Gmail, à ouvrir dans un navigateur.
+- [Maquette de l'interface](docs/maquette.html) : six écrans basse fidélité de la v1 Gmail, à ouvrir dans un navigateur. L'onglet Drive en reprend la disposition.

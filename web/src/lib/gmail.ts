@@ -82,6 +82,8 @@ export interface TreeBrick {
 
 export interface TreeNode {
   k: string | null;
+  /** Nom à afficher quand il diffère de la valeur (dossier Drive). */
+  n?: string;
   v: number;
   c: number;
   children?: TreeNode[];

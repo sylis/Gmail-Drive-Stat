@@ -12,8 +12,8 @@
     <h1>Gmail Drive Stat</h1>
     <p class="muted">
       Connectez-vous avec votre compte Google pour voir ce qui occupe votre espace de stockage et faire le ménage.
-      L'outil demandera à lire et modifier vos e-mails Gmail : il n'en lit que les métadonnées, jamais le contenu, et
-      n'agit que sur ce que vous sélectionnez et confirmez. Rien ne quitte ce serveur.
+      L'outil demandera à lire et modifier vos e-mails Gmail et vos fichiers Drive : il n'en lit que les métadonnées,
+      jamais le contenu, et n'agit que sur ce que vous sélectionnez et confirmez. Rien ne quitte ce serveur.
     </p>
 
     {#if status.needsReauth}

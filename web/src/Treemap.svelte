@@ -9,6 +9,8 @@
   export interface Node {
     /** Valeur du bloc ; null pour un regroupement « autres ». */
     k: string | null;
+    /** Nom à afficher quand il diffère de la valeur (dossier Drive). */
+    n?: string;
     v: number;
     c: number;
     children?: Node[];
@@ -114,41 +116,45 @@
     let depthMax = 0;
 
     const build = (node: Node, depth: number, path: string[]): Item[] => {
+      const items: Item[] = [];
       if (node.children) {
         depthMax = Math.max(depthMax, depth + 1);
-        return node.children.map((child) => {
+        for (const child of node.children) {
           if (child.k === null) {
-            return { name: `Autres blocs · ${child.c.toLocaleString('fr-FR')} ${unit}`, value: child.v, itemStyle: merged, label: mergedLabel };
+            items.push({ name: `Autres blocs · ${child.c.toLocaleString('fr-FR')} ${unit}`, value: child.v, itemStyle: merged, label: mergedLabel });
+            continue;
           }
           const childPath = [...path, child.k];
-          return {
-            name: nameOf(depth, child.k),
+          items.push({
+            name: child.n ?? nameOf(depth, child.k),
             value: child.v,
             path: childPath,
             itemStyle: merged,
             children: build(child, depth + 1, childPath),
-          };
-        });
+          });
+        }
       }
       const block: Block = { path, v: node.v, c: node.c };
-      const items: Item[] = (node.bricks ?? []).map((brick) => ({
-        name: '',
-        value: brick.v,
-        brick,
-        block,
-        itemStyle: {
-          color: color(colors[brick.t] ?? '--t-none'),
-          ...hatch,
-          ...(failed.has(brick.id)
-            ? { borderColor: color('--danger'), borderWidth: 2 }
-            : selected.has(brick.id)
-              ? { borderColor: ink, borderWidth: 2 }
-              : {}),
-        },
-      }));
-      if (node.rest) {
+      for (const brick of node.bricks ?? []) {
         items.push({
-          name: `${node.rest.c.toLocaleString('fr-FR')} plus petites`,
+          name: '',
+          value: brick.v,
+          brick,
+          block,
+          itemStyle: {
+            color: color(colors[brick.t] ?? '--t-none'),
+            ...hatch,
+            ...(failed.has(brick.id)
+              ? { borderColor: color('--danger'), borderWidth: 2 }
+              : selected.has(brick.id)
+                ? { borderColor: ink, borderWidth: 2 }
+                : {}),
+          },
+        });
+      }
+      if (node.rest && node.rest.v > 0) {
+        items.push({
+          name: `${node.rest.c.toLocaleString('fr-FR')} plus petit${node.rest.c > 1 ? 's' : ''}`,
           value: node.rest.v,
           itemStyle: merged,
           label: mergedLabel,

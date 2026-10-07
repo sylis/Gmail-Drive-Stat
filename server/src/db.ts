@@ -162,6 +162,72 @@ const MIGRATIONS: string[] = [
   ) STRICT, WITHOUT ROWID;
   CREATE INDEX gmail_cleanup_items_state ON gmail_cleanup_items(cleanup_id, state);
   `,
+  // Lot 4 : métadonnées Drive, scans et journal des nettoyages (même forme que celui de Gmail).
+  `
+  CREATE TABLE drive_files (
+    account_id  INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    id          TEXT NOT NULL,
+    name        TEXT NOT NULL,
+    mime        TEXT NOT NULL,
+    folder      INTEGER NOT NULL,
+    type        TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    parent_id   TEXT,
+    trashed     INTEGER NOT NULL,
+    modified    INTEGER NOT NULL,
+    shared      INTEGER NOT NULL,
+    starred     INTEGER NOT NULL,
+    owned       INTEGER NOT NULL,
+    link        TEXT,
+    ancestors   TEXT NOT NULL DEFAULT '',
+    path        TEXT NOT NULL DEFAULT '',
+    scan_id     INTEGER NOT NULL,
+    PRIMARY KEY (account_id, id)
+  ) STRICT, WITHOUT ROWID;
+  CREATE INDEX drive_files_size ON drive_files(account_id, folder, trashed, size DESC);
+
+  CREATE TABLE drive_scans (
+    id           INTEGER PRIMARY KEY,
+    account_id   INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    status       TEXT NOT NULL,
+    page_token   TEXT,
+    root_id      TEXT,
+    seen         INTEGER NOT NULL,
+    error        TEXT,
+    created_at   INTEGER NOT NULL,
+    finished_at  INTEGER
+  ) STRICT;
+  CREATE INDEX drive_scans_account ON drive_scans(account_id, id DESC);
+
+  CREATE TABLE drive_cleanups (
+    id           INTEGER PRIMARY KEY,
+    account_id   INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    action       TEXT NOT NULL,
+    simulate     INTEGER NOT NULL,
+    status       TEXT NOT NULL,
+    error        TEXT,
+    source_id    INTEGER,
+    created_at   INTEGER NOT NULL,
+    finished_at  INTEGER
+  ) STRICT;
+  CREATE INDEX drive_cleanups_account ON drive_cleanups(account_id, id DESC);
+
+  CREATE TABLE drive_cleanup_items (
+    cleanup_id   INTEGER NOT NULL REFERENCES drive_cleanups(id) ON DELETE CASCADE,
+    thread_id    TEXT NOT NULL,
+    zone         TEXT NOT NULL,
+    subject      TEXT NOT NULL,
+    domain       TEXT NOT NULL,
+    size         INTEGER NOT NULL,
+    msgs         INTEGER NOT NULL,
+    message_ids  TEXT NOT NULL,
+    restore      TEXT NOT NULL,
+    state        TEXT NOT NULL,
+    error        TEXT,
+    PRIMARY KEY (cleanup_id, thread_id, zone)
+  ) STRICT, WITHOUT ROWID;
+  CREATE INDEX drive_cleanup_items_state ON drive_cleanup_items(cleanup_id, state);
+  `,
 ];
 
 /** Exécute `work` dans une transaction, annulée si elle échoue. */

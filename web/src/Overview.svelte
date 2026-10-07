@@ -15,9 +15,9 @@
     gmailPhotos: {
       label: 'Gmail et Photos',
       colorVar: '--q-gmail',
-      note: 'Google ne distingue pas les deux ; le scan Gmail donnera le détail.',
+      note: 'Google ne distingue pas les deux ; l’onglet Gmail mesure la part des e-mails.',
     },
-    drive: { label: 'Drive', colorVar: '--q-drive', note: 'Vos fichiers Drive, hors corbeille.' },
+    drive: { label: 'Drive', colorVar: '--q-drive', note: 'Vos fichiers Drive, hors corbeille ; le détail est dans l’onglet Drive.' },
     driveTrash: {
       label: 'Corbeille Drive',
       colorVar: '--q-trash',

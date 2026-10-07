@@ -1,5 +1,8 @@
+import { TreeBuilder, type TreeBrick, type TreeNode } from '../tree.js';
 import type { Zone } from './parse.js';
 import type { GmailStore } from './store.js';
+
+export type { TreeBrick, TreeNode };
 
 /** Axes de regroupement : chacun sert de niveau du treemap et de filtre. */
 const AXES = {
@@ -86,60 +89,7 @@ function withPath(base: Where, levels: Axis[], path: string[]): Where {
   return { sql, params: [...base.params, ...path] };
 }
 
-export interface TreeBrick {
-  /** Identifiant de la conversation. */
-  id: string;
-  v: number;
-  /** Type de la plus grosse pièce jointe. */
-  t: string;
-}
-
-export interface TreeNode {
-  /** Valeur de l'axe pour ce bloc ; null pour un regroupement « autres ». */
-  k: string | null;
-  v: number;
-  /** Nombre de conversations. */
-  c: number;
-  children?: TreeNode[];
-  bricks?: TreeBrick[];
-  /** Conversations trop petites pour avoir leur brique : nombre et taille cumulée. */
-  rest?: { c: number; v: number };
-}
-
-// Au-delà, le navigateur peine : les plus petites briques sont fondues dans leur bloc, les plus petits blocs en « autres ».
-const MAX_BRICKS = 4000;
-const MAX_CHILDREN = 80;
 const ZONE_BRICKS = 400;
-
-interface Group {
-  v: number;
-  c: number;
-  children: Map<string, Group>;
-  bricks: TreeBrick[];
-  restCount: number;
-  restSize: number;
-}
-const newGroup = (): Group => ({ v: 0, c: 0, children: new Map(), bricks: [], restCount: 0, restSize: 0 });
-
-function toNode(key: string | null, group: Group): TreeNode {
-  const node: TreeNode = { k: key, v: group.v, c: group.c };
-  if (group.children.size > 0) {
-    const sorted = [...group.children].sort((a, b) => b[1].v - a[1].v);
-    node.children = sorted.slice(0, MAX_CHILDREN).map(([childKey, child]) => toNode(childKey, child));
-    const others = sorted.slice(MAX_CHILDREN);
-    if (others.length > 0) {
-      node.children.push({
-        k: null,
-        v: others.reduce((sum, [, child]) => sum + child.v, 0),
-        c: others.reduce((sum, [, child]) => sum + child.c, 0),
-      });
-    }
-  } else {
-    node.bricks = group.bricks;
-    if (group.restCount > 0) node.rest = { c: group.restCount, v: group.restSize };
-  }
-  return node;
-}
 
 export interface TreemapQuery {
   levels: Axis[];
@@ -164,28 +114,9 @@ export class GmailQueries {
       .q(`SELECT b.thread_id AS id, b.size AS v, b.att_type AS t${keys} FROM gmail_bricks b WHERE ${condition.sql} ORDER BY b.size DESC`)
       .iterate(...condition.params) as Iterable<{ id: string; v: number; t: string } & Record<string, string>>;
 
-    const root = newGroup();
-    let rank = 0;
-    for (const row of rows) {
-      let group = root;
-      group.v += row.v;
-      group.c++;
-      for (let index = 0; index < open.length; index++) {
-        const key = row[`k${index}`]!;
-        let child = group.children.get(key);
-        if (!child) group.children.set(key, (child = newGroup()));
-        child.v += row.v;
-        child.c++;
-        group = child;
-      }
-      // Les lignes arrivent par taille décroissante : les premières ont leur brique, les suivantes sont fondues.
-      if (rank++ < MAX_BRICKS) group.bricks.push({ id: row.id, v: row.v, t: row.t });
-      else {
-        group.restCount++;
-        group.restSize += row.v;
-      }
-    }
-    return toNode(null, root);
+    const tree = new TreeBuilder();
+    for (const row of rows) tree.add(open.map((_, index) => row[`k${index}`]!), { id: row.id, v: row.v, t: row.t });
+    return tree.build();
   }
 
   /** Zone latérale (envoyés ou corbeille) : ses plus grosses briques et son total. */

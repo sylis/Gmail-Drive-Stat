@@ -1,13 +1,18 @@
 import {
   canReadGmail,
+  canReadDrive,
+  canWriteDrive,
   canWriteGmail,
+  DRIVE_FOLDER,
   MissingScopeError,
   NotFoundError,
   SCOPES,
+  type DriveApi,
   type GmailApi,
   type GoogleGateway,
   type GoogleProfile,
   type GoogleTokens,
+  type RawDriveFile,
   type RawGmailMessage,
   type RawStorageQuota,
 } from '../src/google.ts';
@@ -36,6 +41,9 @@ export class FakeGoogle implements GoogleGateway {
     { id: 'Label_4', name: 'Voyages', type: 'user' },
   ];
   threads = new Map<string, FakeThread>();
+  /** Fichiers et dossiers du faux Drive, par identifiant ; la racine « Mon Drive » est `root`. */
+  files = new Map<string, RawDriveFile>();
+  driveCalls = { list: 0, trash: 0, untrash: 0, delete: 0 };
   revoked = 0;
   calls = { listThreads: 0, getThread: 0, getMessage: 0, trash: 0, untrash: 0, delete: 0, batchDelete: 0, batchModify: 0 };
   /** Messages que « Gmail » refuse de modifier ou de supprimer (erreur définitive, sans nouvelle tentative). */
@@ -113,6 +121,70 @@ export class FakeGoogle implements GoogleGateway {
     thread.messages = thread.messages.filter((message) => message.id !== id);
     if (thread.messages.length === 0) this.threads.delete(thread.id);
     else this.touch(thread.id);
+  }
+
+  /** Ajoute un fichier dont le compte est propriétaire, à la racine par défaut. */
+  addFile(id: string, file: Partial<RawDriveFile> & { size?: number } = {}): RawDriveFile {
+    const { size = 1000, ...rest } = file;
+    const added: RawDriveFile = {
+      id,
+      name: id,
+      mimeType: 'application/pdf',
+      quotaBytesUsed: String(size),
+      parents: ['root'],
+      trashed: false,
+      modifiedTime: '2024-01-01T00:00:00.000Z',
+      ownedByMe: true,
+      ...rest,
+    };
+    this.files.set(id, added);
+    return added;
+  }
+
+  addFolder(id: string, name: string, parent = 'root', ownedByMe = true): RawDriveFile {
+    return this.addFile(id, { name, mimeType: DRIVE_FOLDER, parents: [parent], size: 0, ownedByMe });
+  }
+
+  drive(tokens: GoogleTokens): DriveApi {
+    if (!canReadDrive(tokens)) throw new MissingScopeError('Lecture de Drive non autorisée');
+    const write = async (id: string): Promise<RawDriveFile> => {
+      if (!canWriteDrive(tokens)) throw new MissingScopeError('Modification de Drive non autorisée');
+      await this.#before();
+      if (this.refused.has(id)) throw Object.assign(new Error('Drive refuse cette opération'), { response: { status: 403 } });
+      const file = this.files.get(id);
+      if (!file) throw new NotFoundError('fichier supprimé');
+      return file;
+    };
+    return {
+      rootId: async () => {
+        await this.#before();
+        return 'root';
+      },
+      listFiles: async (pageToken) => {
+        await this.#before();
+        this.driveCalls.list++;
+        // Comme Drive : vos fichiers, et tous les dossiers visibles.
+        const visible = [...this.files.values()].filter((file) => file.ownedByMe !== false || file.mimeType === DRIVE_FOLDER);
+        const start = Number(pageToken ?? 0);
+        return {
+          files: visible.slice(start, start + this.pageSize),
+          nextPageToken: start + this.pageSize < visible.length ? String(start + this.pageSize) : undefined,
+        };
+      },
+      trashFile: async (id) => {
+        (await write(id)).trashed = true;
+        this.driveCalls.trash++;
+      },
+      untrashFile: async (id) => {
+        (await write(id)).trashed = false;
+        this.driveCalls.untrash++;
+      },
+      deleteFile: async (id) => {
+        await write(id);
+        this.files.delete(id);
+        this.driveCalls.delete++;
+      },
+    };
   }
 
   gmail(tokens: GoogleTokens): GmailApi {
@@ -306,5 +378,64 @@ export function seedMailbox(fake: FakeGoogle, count: number, seed = 42): void {
       });
     });
     fake.addThread(`t${index.toString(16).padStart(6, '0')}`, messages);
+  }
+}
+
+const DRIVE_FOLDERS: [string, string[]][] = [
+  ['Photos', ['2021', '2022', '2023', 'Vacances en Crète']],
+  ['Vidéos', ['Famille', 'Montages']],
+  ['Administratif', ['Impôts', 'Banque', 'Logement']],
+  ['Travail', ['Projets', 'Archives', 'Présentations']],
+  ['Sauvegardes', ['Téléphone', 'Ancien ordinateur']],
+  ['Musique', []],
+];
+const DRIVE_FILES: Record<string, [string, string, number][]> = {
+  Photos: [['IMG_{n}.jpg', 'image/jpeg', 4], ['IMG_{n}.heic', 'image/heic', 2.5], ['pano_{n}.png', 'image/png', 9]],
+  Vidéos: [['VID_{n}.mp4', 'video/mp4', 60], ['clip_{n}.mov', 'video/quicktime', 25]],
+  Administratif: [['avis_{n}.pdf', 'application/pdf', 0.6], ['releve_{n}.pdf', 'application/pdf', 0.3], ['bail_{n}.pdf', 'application/pdf', 3]],
+  Travail: [
+    ['rapport_{n}.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 1.2],
+    ['budget_{n}.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 0.8],
+    ['Notes {n}', 'application/vnd.google-apps.document', 0],
+    ['support_{n}.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 14],
+  ],
+  Sauvegardes: [['sauvegarde_{n}.zip', 'application/zip', 80], ['export_{n}.tar.gz', 'application/gzip', 30]],
+  Musique: [['piste_{n}.mp3', 'audio/mpeg', 7], ['concert_{n}.flac', 'audio/flac', 38]],
+};
+
+/** Remplit le faux Drive d'une arborescence fictive et reproductible. */
+export function seedDrive(fake: FakeGoogle, count: number, seed = 7): void {
+  let state = seed;
+  const random = () => (state = (state * 16807) % 2147483647) / 2147483647;
+  const pick = <T>(items: T[]): T => items[Math.floor(random() * items.length)]!;
+  const now = Date.now();
+
+  const folders: { id: string; top: string }[] = [];
+  DRIVE_FOLDERS.forEach(([top, children], index) => {
+    fake.addFolder(`d${index}`, top);
+    folders.push({ id: `d${index}`, top });
+    children.forEach((child, position) => {
+      fake.addFolder(`d${index}-${position}`, child, `d${index}`);
+      folders.push({ id: `d${index}-${position}`, top });
+    });
+  });
+  // Un dossier partagé par quelqu'un d'autre, où le compte a déposé des fichiers à lui.
+  fake.addFolder('d-partage', 'Projet commun', 'ailleurs', false);
+  folders.push({ id: 'd-partage', top: 'Travail' });
+
+  for (let index = 0; index < count; index++) {
+    const folder = random() < 0.04 ? { id: 'root', top: pick(Object.keys(DRIVE_FILES)) } : pick(folders);
+    const [pattern, mimeType, megabytes] = pick(DRIVE_FILES[folder.top]!);
+    fake.addFile(`f${index.toString(16).padStart(5, '0')}`, {
+      name: pattern.replace('{n}', String(1000 + index)),
+      mimeType,
+      size: Math.floor(megabytes * MB * (0.2 + random() * 1.6)),
+      parents: [folder.id],
+      trashed: random() < 0.03,
+      shared: random() < 0.08,
+      starred: random() < 0.02,
+      modifiedTime: new Date(now - Math.floor(random() ** 1.5 * 7 * 365) * 24 * 3600 * 1000).toISOString(),
+      webViewLink: 'https://drive.google.com/',
+    });
   }
 }

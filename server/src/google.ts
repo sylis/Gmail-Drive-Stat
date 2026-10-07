@@ -6,9 +6,13 @@ import type { Config } from './config.js';
 const DRIVE_METADATA_SCOPE = 'https://www.googleapis.com/auth/drive.metadata.readonly';
 export const GMAIL_READ_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 export const GMAIL_FULL_SCOPE = 'https://mail.google.com/';
-export const SCOPES = ['openid', 'email', 'profile', DRIVE_METADATA_SCOPE, GMAIL_FULL_SCOPE];
+// Lot 4 : accès complet à Drive, pour mettre des fichiers à la corbeille ou les supprimer.
+export const DRIVE_FULL_SCOPE = 'https://www.googleapis.com/auth/drive';
+export const SCOPES = ['openid', 'email', 'profile', DRIVE_METADATA_SCOPE, GMAIL_FULL_SCOPE, DRIVE_FULL_SCOPE];
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
+const DRIVE = 'https://www.googleapis.com/drive/v3';
+export const DRIVE_FOLDER = 'application/vnd.google-apps.folder';
 
 export interface GoogleTokens {
   refresh_token?: string | null;
@@ -49,6 +53,37 @@ export interface RawGmailMessage {
   sizeEstimate?: number;
   internalDate?: string;
   payload?: RawGmailPart;
+}
+
+/** Fichier ou dossier tel que le renvoie l'API Drive : métadonnées seulement. */
+export interface RawDriveFile {
+  id: string;
+  name?: string;
+  mimeType?: string;
+  /** Espace compté dans le quota, en octets sous forme de chaîne ; absent ou nul pour un dossier ou un Google Docs. */
+  quotaBytesUsed?: string;
+  parents?: string[];
+  trashed?: boolean;
+  modifiedTime?: string;
+  shared?: boolean;
+  starred?: boolean;
+  ownedByMe?: boolean;
+  webViewLink?: string;
+}
+
+export interface DriveApi {
+  /** Identifiant du dossier racine « Mon Drive ». */
+  rootId(): Promise<string>;
+  /** Une page des fichiers dont le compte est propriétaire, et de tous les dossiers visibles (pour reconstituer les chemins). */
+  listFiles(pageToken?: string): Promise<{ files: RawDriveFile[]; nextPageToken?: string }>;
+
+  // --- Écritures : exigent l'accès complet à Drive ---
+
+  /** Met un fichier à la corbeille ; Drive le supprime de lui-même au bout de 30 jours. */
+  trashFile(id: string): Promise<void>;
+  untrashFile(id: string): Promise<void>;
+  /** Supprime définitivement un fichier, sans passer par la corbeille. Irréversible. */
+  deleteFile(id: string): Promise<void>;
 }
 
 export interface GmailApi {
@@ -97,12 +132,15 @@ export interface GoogleGateway {
   revoke(tokens: GoogleTokens): Promise<void>;
   storageQuota(tokens: GoogleTokens, onRefresh: OnRefresh): Promise<RawStorageQuota>;
   gmail(tokens: GoogleTokens, onRefresh: OnRefresh): GmailApi;
+  drive(tokens: GoogleTokens, onRefresh: OnRefresh): DriveApi;
 }
 
 export const hasScope = (tokens: GoogleTokens | null, scope: string) => Boolean(tokens?.scope?.split(' ').includes(scope));
 /** L'accès complet à Gmail vaut aussi pour la lecture. */
 export const canReadGmail = (tokens: GoogleTokens | null) => hasScope(tokens, GMAIL_READ_SCOPE) || hasScope(tokens, GMAIL_FULL_SCOPE);
 export const canWriteGmail = (tokens: GoogleTokens | null) => hasScope(tokens, GMAIL_FULL_SCOPE);
+export const canReadDrive = (tokens: GoogleTokens | null) => hasScope(tokens, DRIVE_METADATA_SCOPE) || hasScope(tokens, DRIVE_FULL_SCOPE);
+export const canWriteDrive = (tokens: GoogleTokens | null) => hasScope(tokens, DRIVE_FULL_SCOPE);
 
 // Structure des pièces jointes sans leur contenu : les parties s'emboîtent, on descend à une profondeur fixe.
 const PART_FIELDS = (depth: number): string =>
@@ -136,7 +174,7 @@ export function createGoogleGateway(config: Config): GoogleGateway | null {
         scope: fresh.scope ?? tokens.scope,
       }),
     );
-    return async <T>(url: string, method: 'GET' | 'POST' | 'DELETE' = 'GET', data?: object): Promise<T> => {
+    return async <T>(url: string, method: 'GET' | 'POST' | 'PATCH' | 'DELETE' = 'GET', data?: object): Promise<T> => {
       try {
         return (await client.request<T>({ url, method, data, retry: false })).data;
       } catch (error) {
@@ -189,11 +227,39 @@ export function createGoogleGateway(config: Config): GoogleGateway | null {
     },
 
     async storageQuota(tokens, onRefresh) {
-      const get = session(tokens, onRefresh, hasScope(tokens, DRIVE_METADATA_SCOPE));
-      const about = await get<{ storageQuota?: RawStorageQuota }>(
-        'https://www.googleapis.com/drive/v3/about?fields=storageQuota',
-      );
+      const get = session(tokens, onRefresh, canReadDrive(tokens));
+      const about = await get<{ storageQuota?: RawStorageQuota }>(`${DRIVE}/about?fields=storageQuota`);
       return about.storageQuota ?? {};
+    },
+
+    drive(tokens, onRefresh) {
+      const get = session(tokens, onRefresh, canReadDrive(tokens));
+      const write = async (id: string, method: 'PATCH' | 'DELETE', data?: object): Promise<void> => {
+        if (!canWriteDrive(tokens)) throw new MissingScopeError('Modification de Drive non autorisée');
+        await get(`${DRIVE}/files/${encodeURIComponent(id)}`, method, data);
+      };
+      return {
+        async rootId() {
+          return (await get<{ id: string }>(`${DRIVE}/files/root?fields=id`)).id;
+        },
+        async listFiles(pageToken) {
+          const params = new URLSearchParams({
+            // Seuls vos propres fichiers libèrent de la place ; les dossiers des autres ne servent qu'à nommer les chemins.
+            q: `'me' in owners or mimeType = '${DRIVE_FOLDER}'`,
+            pageSize: '1000',
+            spaces: 'drive',
+            corpora: 'user',
+            fields:
+              'nextPageToken,files(id,name,mimeType,quotaBytesUsed,parents,trashed,modifiedTime,shared,starred,ownedByMe,webViewLink)',
+          });
+          if (pageToken) params.set('pageToken', pageToken);
+          const page = await get<{ files?: RawDriveFile[]; nextPageToken?: string }>(`${DRIVE}/files?${params}`);
+          return { files: page.files ?? [], nextPageToken: page.nextPageToken };
+        },
+        trashFile: (id) => write(id, 'PATCH', { trashed: true }),
+        untrashFile: (id) => write(id, 'PATCH', { trashed: false }),
+        deleteFile: (id) => write(id, 'DELETE'),
+      };
     },
 
     gmail(tokens, onRefresh) {
@@ -261,7 +327,10 @@ function translateError(error: unknown): unknown {
   if (status === 429 || (status === 403 && /rateLimit|quota|RESOURCE_EXHAUSTED/i.test(reason))) {
     return new RetryLaterError('Google demande de ralentir');
   }
-  if (status === 403 && /insufficient|scope/i.test(reason)) return new MissingScopeError('Autorisation Google insuffisante');
+  // À ne pas confondre avec un refus sur un fichier précis (insufficientFilePermissions), qui n'est pas une affaire d'autorisation.
+  if (status === 403 && /insufficientPermissions|SCOPE_INSUFFICIENT|authentication scopes/i.test(reason)) {
+    return new MissingScopeError('Autorisation Google insuffisante');
+  }
   if (status === 404) return new NotFoundError('Élément introuvable');
   if (status !== undefined && status >= 500) return new RetryLaterError(`Google a répondu ${status}`);
   return error;

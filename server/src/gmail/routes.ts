@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { canReadGmail, canWriteGmail, MissingScopeError, ReauthRequiredError, type GoogleGateway } from '../google.js';
 import type { Account, Store } from '../store.js';
-import { ACTIONS, type CleanupAction, type GmailCleaner, type ItemState, type Target } from './cleaner.js';
+import { MAX_TARGETS, registerCleanupRoutes } from '../cleanup-routes.js';
+import { ACTIONS, type GmailCleaner } from './cleaner.js';
 import type { Zone } from './parse.js';
 import { GmailQueries, isAxis, parseFilters, type Axis } from './queries.js';
 import type { GmailScanner } from './scanner.js';
@@ -20,22 +21,6 @@ export interface GmailDeps {
 
 const ZONES: Zone[] = ['inbox', 'sent', 'trash'];
 const MAX_LEVELS = 5;
-/** Taille maximale d'une sélection, et du corps de requête qui la transporte. */
-const MAX_TARGETS = 200_000;
-const SELECTION_BODY = { bodyLimit: 24 * 1024 * 1024 };
-const STATES: ItemState[] = ['pending', 'done', 'failed', 'skipped'];
-
-/** Briques visées par un nettoyage ; null si la liste est mal formée. */
-function parseTargets(input: unknown): Target[] | null {
-  if (!Array.isArray(input) || input.length === 0 || input.length > MAX_TARGETS) return null;
-  const targets: Target[] = [];
-  for (const entry of input as { id?: unknown; zone?: unknown }[]) {
-    if (typeof entry?.id !== 'string' || entry.id.length > 64 || !ZONES.includes(entry.zone as Zone)) return null;
-    targets.push({ id: entry.id, zone: entry.zone as Zone });
-  }
-  return targets;
-}
-
 interface ViewBody {
   levels?: unknown;
   path?: unknown;
@@ -183,82 +168,16 @@ export function registerGmailRoutes(app: FastifyInstance, { store, gmail, scanne
     return { items: queries.select(account.id, { ...view, filters: parseFilters(request.body?.filters) }, zone, MAX_TARGETS) };
   });
 
-  app.post<{ Body: { items?: unknown } }>('/api/gmail/cleanup/preview', SELECTION_BODY, async (request, reply) => {
-    const account = requireAccount(request, reply);
-    if (!account) return;
-    const targets = parseTargets(request.body?.items);
-    if (!targets) return reply.code(400).send({ error: 'selection-invalide' });
-    return cleaner.preview(account.id, targets);
-  });
-
-  app.post<{ Body: { action?: unknown; items?: unknown; simulate?: unknown; confirm?: unknown } }>(
-    '/api/gmail/cleanup',
-    SELECTION_BODY,
-    async (request, reply) => {
-      const account = requireAccount(request, reply);
-      if (!account) return;
-      const { action, simulate, confirm } = request.body ?? {};
-      const targets = parseTargets(request.body?.items);
-      // La restauration ne se demande pas ici : elle part toujours d'une mise à la corbeille du journal.
-      if (!targets || !ACTIONS.includes(action as CleanupAction) || action === 'untrash') {
-        return reply.code(400).send({ error: 'selection-invalide' });
-      }
-      const preview = cleaner.preview(account.id, targets);
-      if (preview.conversations === 0) return reply.code(400).send({ error: 'selection-vide' });
-      // Confirmation renforcée, vérifiée aussi par le serveur : le nombre de conversations saisi doit être le bon.
-      if (action === 'delete' && confirm !== preview.conversations) return reply.code(400).send({ error: 'confirmation-requise' });
-      if (simulate !== true && !canWriteGmail(store.getTokens(account.id))) return reply.code(403).send({ error: 'autorisation-incomplete' });
-      if (isActive(gmail.latestScan(account.id))) return reply.code(409).send({ error: 'scan-en-cours' });
-      const cleanup = cleaner.start(account.id, action as CleanupAction, targets, simulate === true);
-      if (!cleanup) return reply.code(409).send({ error: 'nettoyage-en-cours' });
-      return { cleanup: cleaner.progress(account.id) };
-    },
-  );
-
-  app.post('/api/gmail/cleanup/cancel', async (request, reply) => {
-    const account = requireAccount(request, reply);
-    if (!account) return;
-    await cleaner.cancel(account.id);
-    return { cleanup: cleaner.progress(account.id) };
-  });
-
-  app.get('/api/gmail/cleanups', async (request, reply) => {
-    const account = requireAccount(request, reply);
-    if (!account) return;
-    reply.header('Cache-Control', 'no-store');
-    return { cleanups: cleaner.journal(account.id) };
-  });
-
-  app.get<{ Params: { id: string }; Querystring: { state?: string; offset?: string } }>(
-    '/api/gmail/cleanups/:id/items',
-    async (request, reply) => {
-      const account = requireAccount(request, reply);
-      if (!account) return;
-      const state = STATES.includes(request.query.state as ItemState) ? (request.query.state as ItemState) : null;
-      const items = cleaner.items(account.id, Number(request.params.id), state, Math.max(0, Number(request.query.offset) || 0), 200);
-      return items ? { items } : reply.code(404).send({ error: 'introuvable' });
-    },
-  );
-
-  app.post<{ Params: { id: string }; Body: { item?: { id?: unknown; zone?: unknown } } }>(
-    '/api/gmail/cleanups/:id/retry',
-    async (request, reply) => {
-      const account = requireAccount(request, reply);
-      if (!account) return;
-      if (isActive(gmail.latestScan(account.id))) return reply.code(409).send({ error: 'scan-en-cours' });
-      const only = request.body?.item ? parseTargets([request.body.item]) : undefined;
-      if (only === null) return reply.code(400).send({ error: 'selection-invalide' });
-      if (!cleaner.retry(account.id, Number(request.params.id), only?.[0])) return reply.code(409).send({ error: 'nettoyage-en-cours' });
-      return { cleanup: cleaner.progress(account.id) };
-    },
-  );
-
-  app.post<{ Params: { id: string } }>('/api/gmail/cleanups/:id/restore', async (request, reply) => {
-    const account = requireAccount(request, reply);
-    if (!account) return;
-    if (isActive(gmail.latestScan(account.id))) return reply.code(409).send({ error: 'scan-en-cours' });
-    if (!cleaner.restore(account.id, Number(request.params.id))) return reply.code(409).send({ error: 'restauration-impossible' });
-    return { cleanup: cleaner.progress(account.id) };
+  registerCleanupRoutes(app, {
+    prefix: '/api/gmail',
+    engine: cleaner,
+    zones: ZONES,
+    // La restauration ne se demande pas ici : elle part toujours d'une mise à la corbeille du journal.
+    actions: ACTIONS.filter((action) => action !== 'untrash'),
+    deleteAction: 'delete',
+    requireAccount,
+    canWrite: (account) => canWriteGmail(store.getTokens(account.id)),
+    busy: (account) => (isActive(gmail.latestScan(account.id)) ? 'scan-en-cours' : null),
   });
 
   /** Efface de ce serveur tout ce qui a été lu de Gmail ; le compte Google n'est pas touché. */

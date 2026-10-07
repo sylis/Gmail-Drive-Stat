@@ -1,13 +1,14 @@
 <script lang="ts">
   import { ApiError, getQuota, logout, type Quota, type Status } from './lib/api';
   import { formatBytes, formatPercent } from './lib/format';
+  import DrivePage from './drive/DrivePage.svelte';
   import GmailPage from './gmail/GmailPage.svelte';
   import Overview from './Overview.svelte';
 
   let { user, onchange }: { user: NonNullable<Status['user']>; onchange: () => void } = $props();
 
-  type Page = 'overview' | 'gmail';
-  const pageOf = (hash: string): Page => (hash.startsWith('#/gmail') ? 'gmail' : 'overview');
+  type Page = 'overview' | 'gmail' | 'drive';
+  const pageOf = (hash: string): Page => (hash.startsWith('#/gmail') ? 'gmail' : hash.startsWith('#/drive') ? 'drive' : 'overview');
 
   let page = $state<Page>(pageOf(location.hash));
   let quota = $state<Quota | null>(null);
@@ -49,7 +50,7 @@
   <nav aria-label="Sections">
     <a href="#/" class:on={page === 'overview'} aria-current={page === 'overview' ? 'page' : undefined}>Vue globale</a>
     <a href="#/gmail" class:on={page === 'gmail'} aria-current={page === 'gmail' ? 'page' : undefined}>Gmail</a>
-    <span class="soon">Drive · bientôt</span>
+    <a href="#/drive" class:on={page === 'drive'} aria-current={page === 'drive' ? 'page' : undefined}>Drive</a>
   </nav>
   <span class="grow"></span>
   {#if quota && quota.limit !== null}
@@ -71,6 +72,8 @@
 
 {#if page === 'gmail'}
   <GmailPage {user} {quota} {onchange} />
+{:else if page === 'drive'}
+  <DrivePage {quota} {onchange} />
 {:else}
   <Overview {quota} loading={quotaLoading} error={quotaError} onreload={loadQuota} {onchange} />
 {/if}
@@ -97,8 +100,7 @@
     align-items: center;
   }
 
-  nav a,
-  .soon {
+  nav a {
     padding: 4px 10px;
     border-radius: 6px;
     color: var(--ink);
@@ -109,11 +111,6 @@
   nav a:hover,
   nav a.on {
     background: var(--fill);
-  }
-
-  .soon {
-    color: var(--muted);
-    font-weight: 400;
   }
 
   .gauge {

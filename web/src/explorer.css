@@ -1,0 +1,241 @@
+/* Écran d'exploration commun à Gmail et à Drive : filtres, treemap et zones, détail, e-mails ou fichiers. */
+.explorer .scopebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 20px;
+  border-bottom: 1px solid var(--line);
+  background: var(--fill);
+  font-size: 13px;
+}
+
+.explorer .main {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr) 270px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.explorer .main.nofilters {
+  grid-template-columns: minmax(0, 1fr) 270px;
+}
+
+.explorer .main > aside:first-child {
+  border-right: 1px solid var(--line);
+}
+
+.explorer .main > aside:last-child {
+  border-left: 1px solid var(--line);
+}
+
+@media (max-width: 1000px) {
+  .explorer .main,
+  .explorer .main.nofilters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.explorer .center {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  min-width: 0;
+}
+
+.explorer .wrap {
+  flex-wrap: wrap;
+}
+
+.explorer .levels {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.explorer .level {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--ink);
+  border-radius: 6px;
+  padding: 2px 4px 2px 8px;
+  font-weight: 600;
+  font-size: 12.5px;
+  background: var(--surface);
+  cursor: grab;
+}
+
+.explorer .level::before {
+  content: '⋮⋮';
+  color: var(--muted);
+  letter-spacing: -2px;
+  margin-right: 2px;
+}
+
+.explorer .level button {
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.explorer .add {
+  padding: 2px 6px;
+  color: var(--muted);
+}
+
+.explorer .crumbs {
+  font-size: 13px;
+  gap: 6px;
+}
+
+.explorer .crumbs nav {
+  font-family: var(--f-mono);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.explorer .crumbs nav button {
+  font: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.explorer .crumbs nav button:disabled {
+  color: var(--ink);
+  text-decoration: none;
+  cursor: default;
+}
+
+.explorer .stage {
+  display: flex;
+  gap: 8px;
+  height: clamp(380px, calc(100vh - 300px), 900px);
+}
+
+.explorer .view {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--fill);
+}
+
+.explorer .view:has(.table-wrap) {
+  border: 0;
+  background: none;
+  overflow: visible;
+}
+
+.explorer .empty {
+  padding: 24px;
+}
+
+.explorer .zone {
+  width: 112px;
+  flex: none;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.explorer .zone.closed {
+  width: 30px;
+}
+
+.explorer .zone-head {
+  padding: 5px 6px;
+  font-size: 11.5px;
+  line-height: 1.3;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.explorer .zone-head .row {
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.explorer .zone.closed .zone-head {
+  align-items: center;
+  padding: 6px 0;
+}
+
+.explorer .vertical {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  white-space: nowrap;
+  margin-top: 6px;
+}
+
+.explorer .zone-body {
+  flex: 1;
+  min-height: 0;
+  border-top: 1px dashed var(--line);
+}
+
+.explorer .fold {
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 4px;
+  font: 12px var(--f-mono);
+  padding: 0 5px;
+  cursor: pointer;
+  line-height: 18px;
+}
+
+.explorer .legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+}
+
+.explorer .legend button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font: 12.5px var(--f-body);
+  color: var(--ink);
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+
+.explorer .legend button:hover {
+  border-color: var(--line);
+}
+
+.explorer .legend button.on {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.explorer .msgs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 20px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.explorer .msgs .table-wrap {
+  max-height: 240px;
+}
