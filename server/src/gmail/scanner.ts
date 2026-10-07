@@ -7,22 +7,18 @@ import {
   type GoogleGateway,
 } from '../google.js';
 import type { Store } from '../store.js';
+import { drain, Stopped, Throttle, type ThrottleOptions } from '../throttle.js';
 import { parseMessage } from './parse.js';
 import { detailThreshold, isWholeMailbox, scopeQuery, type ScanScope } from './scope.js';
 import { isActive, type GmailStore, type Scan, type ScanStats } from './store.js';
 
-export interface ScannerOptions {
-  /** Débit visé, en unités de quota Gmail par seconde (plafond Google : 250 par utilisateur). */
-  unitsPerSecond?: number;
+export interface ScannerOptions extends ThrottleOptions {
   concurrency?: number;
-  /** Attente après un « ralentissez » de Google, en millisecondes, selon le nombre d'essais consécutifs. */
-  backoff?: (attempt: number) => number;
   log?: { warn: (details: object, message: string) => void };
 }
 
 // Coût en unités de quota des appels utilisés (documentation Gmail).
 const COST = { listThreads: 10, getThread: 10, getMessage: 5, labels: 1 };
-const MAX_ATTEMPTS = 8;
 
 /** Avancement d'un scan tel que l'interface l'affiche. */
 export interface ScanProgress {
@@ -51,31 +47,27 @@ interface Run {
   finished: Promise<void>;
 }
 
-class Stopped extends Error {}
-
 /** Exécute les scans Gmail en tâche de fond, un par compte, en respectant le débit autorisé par Google. */
 export class GmailScanner {
   readonly #store: Store;
   readonly #gmail: GmailStore;
   readonly #google: GoogleGateway | null;
-  readonly #options: Required<Omit<ScannerOptions, 'log'>> & Pick<ScannerOptions, 'log'>;
+  readonly #throttle: Throttle;
+  readonly #concurrency: number;
   readonly #runs = new Map<number, Run>();
-  #nextSlot = 0;
+  #log: ScannerOptions['log'];
 
   constructor(store: Store, gmail: GmailStore, google: GoogleGateway | null, options: ScannerOptions = {}) {
     this.#store = store;
     this.#gmail = gmail;
     this.#google = google;
-    this.#options = {
-      unitsPerSecond: options.unitsPerSecond ?? 200,
-      concurrency: options.concurrency ?? 8,
-      backoff: options.backoff ?? ((attempt) => Math.min(60_000, 2000 * 2 ** (attempt - 1))),
-      log: options.log,
-    };
+    this.#throttle = new Throttle(options);
+    this.#concurrency = options.concurrency ?? 8;
+    this.#log = options.log;
   }
 
   setLogger(log: ScannerOptions['log']): void {
-    this.#options.log = log;
+    this.#log = log;
   }
 
   /** Lance un scan ; refuse s'il y en a déjà un en cours ou en pause pour ce compte. */
@@ -174,7 +166,7 @@ export class GmailScanner {
           this.#gmail.updateScan(scan.id, { status: 'auth', error: error instanceof MissingScopeError ? 'autorisation-incomplete' : null });
           return;
         }
-        this.#options.log?.warn({ err: error, scanId: scan.id }, 'Scan Gmail en échec');
+        this.#log?.warn({ err: error, scanId: scan.id }, 'Scan Gmail en échec');
         this.#gmail.updateScan(scan.id, {
           status: 'failed',
           error: error instanceof RetryLaterError ? 'google-indisponible' : 'erreur-interne',
@@ -209,12 +201,12 @@ export class GmailScanner {
       run.pace = { step: 'read', since: Date.now(), done: this.#gmail.queueCounts(initial.id).done };
       // Quand tous les messages doivent être détaillés, une seule lecture par conversation suffit.
       const detail = threshold === 0;
-      await this.#drain(
-        run,
+      await drain(
+        this.#concurrency,
         () => this.#gmail.pendingThreads(initial.id, 500),
         async (thread) => {
           try {
-            const raw = await this.#call(run, COST.getThread, () => api.getThread(thread.id, detail));
+            const raw = await this.#throttle.call(run, COST.getThread, () => api.getThread(thread.id, detail));
             const messages = raw.map((message) => parseMessage(message, detail));
             this.#gmail.saveThread(accountId, thread.id, thread.historyId, messages);
             bump((stats) => {
@@ -238,12 +230,12 @@ export class GmailScanner {
     }
 
     run.pace = { step: 'attachments', since: Date.now(), done: scan().stats.detailDone };
-    await this.#drain(
-      run,
+    await drain(
+      this.#concurrency,
       () => this.#gmail.pendingDetails(scan(), threshold, 500),
       async (messageId) => {
         try {
-          const message = parseMessage(await this.#call(run, COST.getMessage, () => api.getMessage(messageId)), true);
+          const message = parseMessage(await this.#throttle.call(run, COST.getMessage, () => api.getMessage(messageId)), true);
           this.#gmail.saveMessageDetail(accountId, message);
           bump((stats) => {
             stats.detailDone++;
@@ -263,7 +255,7 @@ export class GmailScanner {
   /** Étape 1 : liste les conversations du périmètre, libellé par libellé, page par page. */
   async #list(api: GmailApi, scan: () => Scan, run: Run, bump: (change: (stats: ScanStats) => void) => void): Promise<void> {
     const { scope, accountId, id } = scan();
-    this.#gmail.saveLabels(accountId, await this.#call(run, COST.labels, () => api.labels()));
+    this.#gmail.saveLabels(accountId, await this.#throttle.call(run, COST.labels, () => api.labels()));
     const query = scopeQuery(scope);
     const labelIds: (string | undefined)[] = scope.labelIds.length > 0 ? scope.labelIds : [undefined];
 
@@ -271,7 +263,7 @@ export class GmailScanner {
     for (; label < labelIds.length; label++, pageToken = null) {
       do {
         const token = pageToken ?? undefined;
-        const page = await this.#call(run, COST.listThreads, () =>
+        const page = await this.#throttle.call(run, COST.listThreads, () =>
           api.listThreads({ labelId: labelIds[label], query: query || undefined, pageToken: token }),
         );
         this.#gmail.enqueueThreads(scan(), page.threads);
@@ -280,57 +272,5 @@ export class GmailScanner {
       } while (pageToken);
       bump((stats) => void stats.labelsDone++);
     }
-  }
-
-  /** Traite une file par lots, avec plusieurs appels à Google en parallèle. */
-  async #drain<T>(run: Run, nextBatch: () => T[], handle: (item: T) => Promise<void>): Promise<void> {
-    for (let batch = nextBatch(); batch.length > 0; batch = nextBatch()) {
-      const queue = [...batch];
-      const worker = async () => {
-        try {
-          for (let item = queue.shift(); item !== undefined; item = queue.shift()) await handle(item);
-        } catch (error) {
-          // Une erreur arrête le lot entier : les autres appels en cours se terminent, sans en lancer de nouveaux.
-          queue.length = 0;
-          throw error;
-        }
-      };
-      const results = await Promise.allSettled(Array.from({ length: this.#options.concurrency }, worker));
-      const failures = results.flatMap((result) => (result.status === 'rejected' ? [result.reason as unknown] : []));
-      if (failures.length > 0) throw failures.find((reason) => !(reason instanceof Stopped)) ?? failures[0];
-    }
-  }
-
-  /** Appelle Google au rythme autorisé ; patiente et retente quand il demande de ralentir. */
-  async #call<T>(run: Run, cost: number, request: () => Promise<T>): Promise<T> {
-    for (let attempt = 1; ; attempt++) {
-      if (run.stop) throw new Stopped();
-      const now = Date.now();
-      const slot = Math.max(now, this.#nextSlot);
-      this.#nextSlot = slot + (cost / this.#options.unitsPerSecond) * 1000;
-      if (slot > now) await pause(run, slot - now);
-      try {
-        const result = await request();
-        run.retryAt = null;
-        return result;
-      } catch (error) {
-        if (!(error instanceof RetryLaterError) || attempt >= MAX_ATTEMPTS) throw error;
-        const wait = this.#options.backoff(attempt);
-        run.retryAt = Math.max(run.retryAt ?? 0, Date.now() + wait);
-        // Tous les appels en attente patientent, pas seulement celui-ci.
-        this.#nextSlot = Math.max(this.#nextSlot, Date.now() + wait);
-        await pause(run, wait);
-      }
-    }
-  }
-}
-
-/** Attend `ms` millisecondes, en s'interrompant vite si le scan est mis en pause ou annulé. */
-async function pause(run: Run, ms: number): Promise<void> {
-  for (const until = Date.now() + ms; ; ) {
-    if (run.stop) throw new Stopped();
-    const left = until - Date.now();
-    if (left <= 0) return;
-    await new Promise((resolve) => setTimeout(resolve, Math.min(left, 200)));
   }
 }

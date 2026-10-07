@@ -5,6 +5,7 @@ import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { SecretBox } from '../src/crypto.ts';
 import { openDatabase } from '../src/db.ts';
+import { GmailCleaner } from '../src/gmail/cleaner.ts';
 import { GmailScanner } from '../src/gmail/scanner.ts';
 import { GmailStore } from '../src/gmail/store.ts';
 import { Store } from '../src/store.ts';
@@ -34,5 +35,6 @@ const store = new Store(db, new SecretBox(config.encryptionKey));
 const gmail = new GmailStore(db);
 // Rien à ménager côté Google : le scan de démonstration va plus vite que le vrai.
 const scanner = new GmailScanner(store, gmail, fake, { unitsPerSecond: Number(process.env.DEMO_RATE ?? 1500) });
-const app = await buildApp({ config, store, gmail, scanner, google: fake, webRoot: resolve(import.meta.dirname, '../../dist/web') });
+const cleaner = new GmailCleaner(store, gmail, fake, { unitsPerSecond: Number(process.env.DEMO_RATE ?? 1500) });
+const app = await buildApp({ config, store, gmail, scanner, cleaner, google: fake, webRoot: resolve(import.meta.dirname, '../../dist/web') });
 await app.listen({ port, host: '127.0.0.1' });

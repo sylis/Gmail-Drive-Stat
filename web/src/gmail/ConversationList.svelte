@@ -74,7 +74,7 @@
       </thead>
       <tbody>
         {#each rows as row (row.id)}
-          <tr class="clickable" class:sel={selected.has(row.id)} onclick={(event) => onselect(row, event.ctrlKey || event.metaKey)}>
+          <tr class="clickable" class:sel={selected.has(`${row.zone}:${row.id}`)} onclick={(event) => onselect(row, event.ctrlKey || event.metaKey)}>
             <td>{row.subject || '(sans objet)'}</td>
             <td>{row.domain}</td>
             <td class="num">{new Date(row.date).toLocaleDateString('fr-FR')}</td>

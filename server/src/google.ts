@@ -1,10 +1,12 @@
 import { CodeChallengeMethod, OAuth2Client } from 'google-auth-library';
 import type { Config } from './config.js';
 
-// Lot 1 : identité + lecture du quota. Lot 2 : lecture de Gmail. Les accès en écriture arrivent avec le nettoyage.
+// Lot 1 : identité + lecture du quota. Lot 2 : lecture de Gmail. Lot 3 : accès complet à Gmail, seul à permettre
+// la suppression définitive (la corbeille, l'archivage et lu/non lu se contenteraient de gmail.modify).
 const DRIVE_METADATA_SCOPE = 'https://www.googleapis.com/auth/drive.metadata.readonly';
 export const GMAIL_READ_SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
-export const SCOPES = ['openid', 'email', 'profile', DRIVE_METADATA_SCOPE, GMAIL_READ_SCOPE];
+export const GMAIL_FULL_SCOPE = 'https://mail.google.com/';
+export const SCOPES = ['openid', 'email', 'profile', DRIVE_METADATA_SCOPE, GMAIL_FULL_SCOPE];
 
 const GMAIL = 'https://gmail.googleapis.com/gmail/v1/users/me';
 
@@ -61,6 +63,18 @@ export interface GmailApi {
   getThread(id: string, detail: boolean): Promise<RawGmailMessage[]>;
   /** Un message avec la structure de ses pièces jointes. */
   getMessage(id: string): Promise<RawGmailMessage>;
+
+  // --- Écritures : exigent l'accès complet à Gmail ---
+
+  /** Met un message à la corbeille ; Gmail le supprime de lui-même au bout de 30 jours. */
+  trashMessage(id: string): Promise<void>;
+  untrashMessage(id: string): Promise<void>;
+  /** Supprime définitivement un message, sans passer par la corbeille. Irréversible. */
+  deleteMessage(id: string): Promise<void>;
+  /** Supprime définitivement jusqu'à 1000 messages en un appel. Irréversible. */
+  batchDelete(ids: string[]): Promise<void>;
+  /** Ajoute et retire des libellés sur jusqu'à 1000 messages en un appel. */
+  batchModify(ids: string[], change: { add?: string[]; remove?: string[] }): Promise<void>;
 }
 
 /** Google a retiré l'autorisation (expiration du mode test, révocation) : l'utilisateur doit se reconnecter. */
@@ -86,6 +100,9 @@ export interface GoogleGateway {
 }
 
 export const hasScope = (tokens: GoogleTokens | null, scope: string) => Boolean(tokens?.scope?.split(' ').includes(scope));
+/** L'accès complet à Gmail vaut aussi pour la lecture. */
+export const canReadGmail = (tokens: GoogleTokens | null) => hasScope(tokens, GMAIL_READ_SCOPE) || hasScope(tokens, GMAIL_FULL_SCOPE);
+export const canWriteGmail = (tokens: GoogleTokens | null) => hasScope(tokens, GMAIL_FULL_SCOPE);
 
 // Structure des pièces jointes sans leur contenu : les parties s'emboîtent, on descend à une profondeur fixe.
 const PART_FIELDS = (depth: number): string =>
@@ -107,8 +124,8 @@ export function createGoogleGateway(config: Config): GoogleGateway | null {
   const newClient = () => new OAuth2Client({ ...credentials, redirectUri: config.redirectUri });
 
   /** Client authentifié qui enregistre les jetons renouvelés et traduit les erreurs de Google. */
-  const session = (tokens: GoogleTokens, onRefresh: OnRefresh, requiredScope: string) => {
-    if (!hasScope(tokens, requiredScope)) throw new MissingScopeError(`Autorisation absente : ${requiredScope}`);
+  const session = (tokens: GoogleTokens, onRefresh: OnRefresh, authorized: boolean) => {
+    if (!authorized) throw new MissingScopeError('Autorisation Google absente pour cette lecture');
     const client = newClient();
     client.setCredentials(tokens);
     client.on('tokens', (fresh) =>
@@ -119,9 +136,9 @@ export function createGoogleGateway(config: Config): GoogleGateway | null {
         scope: fresh.scope ?? tokens.scope,
       }),
     );
-    return async <T>(url: string): Promise<T> => {
+    return async <T>(url: string, method: 'GET' | 'POST' | 'DELETE' = 'GET', data?: object): Promise<T> => {
       try {
-        return (await client.request<T>({ url, retry: false })).data;
+        return (await client.request<T>({ url, method, data, retry: false })).data;
       } catch (error) {
         throw translateError(error);
       }
@@ -172,7 +189,7 @@ export function createGoogleGateway(config: Config): GoogleGateway | null {
     },
 
     async storageQuota(tokens, onRefresh) {
-      const get = session(tokens, onRefresh, DRIVE_METADATA_SCOPE);
+      const get = session(tokens, onRefresh, hasScope(tokens, DRIVE_METADATA_SCOPE));
       const about = await get<{ storageQuota?: RawStorageQuota }>(
         'https://www.googleapis.com/drive/v3/about?fields=storageQuota',
       );
@@ -180,8 +197,20 @@ export function createGoogleGateway(config: Config): GoogleGateway | null {
     },
 
     gmail(tokens, onRefresh) {
-      const get = session(tokens, onRefresh, GMAIL_READ_SCOPE);
+      const get = session(tokens, onRefresh, canReadGmail(tokens));
+      const write = async (url: string, method: 'POST' | 'DELETE', data?: object): Promise<void> => {
+        if (!canWriteGmail(tokens)) throw new MissingScopeError('Modification de Gmail non autorisée');
+        await get(url, method, data);
+      };
+      const message = (id: string) => `${GMAIL}/messages/${encodeURIComponent(id)}`;
       return {
+        trashMessage: (id) => write(`${message(id)}/trash`, 'POST'),
+        untrashMessage: (id) => write(`${message(id)}/untrash`, 'POST'),
+        deleteMessage: (id) => write(message(id), 'DELETE'),
+        batchDelete: (ids) => write(`${GMAIL}/messages/batchDelete`, 'POST', { ids }),
+        batchModify: (ids, { add = [], remove = [] }) =>
+          write(`${GMAIL}/messages/batchModify`, 'POST', { ids, addLabelIds: add, removeLabelIds: remove }),
+
         async profile() {
           const profile = await get<{ messagesTotal?: number; threadsTotal?: number }>(`${GMAIL}/profile`);
           return { messagesTotal: profile.messagesTotal ?? 0, threadsTotal: profile.threadsTotal ?? 0 };

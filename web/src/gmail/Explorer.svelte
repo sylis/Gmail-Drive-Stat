@@ -8,6 +8,8 @@
     describeScope,
     getConversation,
     getTreemap,
+    gmailCleanup,
+    selectAll,
     ZONE_LABELS,
     type Axis,
     type Conversation,
@@ -16,7 +18,12 @@
     type TreemapData,
     type Zone,
   } from '../lib/gmail';
-  import Treemap, { type Block, type Brick } from '../Treemap.svelte';
+  import ActionBar from '../cleanup/ActionBar.svelte';
+  import CleanupPanel from '../cleanup/CleanupPanel.svelte';
+  import ConfirmDialog from '../cleanup/ConfirmDialog.svelte';
+  import JournalDialog from '../cleanup/JournalDialog.svelte';
+  import type { CleanupItem } from '../lib/cleanup';
+  import Treemap, { type Block } from '../Treemap.svelte';
   import AttachmentList from './AttachmentList.svelte';
   import ConversationList from './ConversationList.svelte';
   import DetailPanel from './DetailPanel.svelte';
@@ -29,6 +36,7 @@
     refreshKey,
     onrescan,
     onshowscan,
+    onchange,
     onauth,
   }: {
     email: string;
@@ -38,6 +46,8 @@
     refreshKey: number;
     onrescan: () => void;
     onshowscan: () => void;
+    /** Une action a modifié l'état du serveur : à relire sans attendre. */
+    onchange: () => void;
     onauth: () => void;
   } = $props();
 
@@ -58,16 +68,41 @@
   let filters = $state<Filters>({});
   let mode = $state<'treemap' | 'list' | 'attachments'>('treemap');
   let data = $state<TreemapData | null>(null);
+  /** Niveaux et zoom pour lesquels `data` a été calculé : la vue affichée peut avoir un temps de retard sur la vue demandée. */
+  let shown = $state<{ levels: Axis[]; path: string[] }>({ levels: [], path: [] });
   let loadError = $state(false);
   let filtersOpen = $state(true);
   let folded = $state<Record<'sent' | 'trash', boolean>>({ sent: false, trash: false });
   let dragged = $state<number | null>(null);
 
-  let selection = $state<{ id: string; zone: Zone; block: Block | null } | null>(null);
+  interface Picked {
+    id: string;
+    zone: Zone;
+    size: number;
+  }
+  /** Brique dont le panneau de détail montre la conversation. */
+  let focus = $state<{ id: string; zone: Zone; block: Block | null } | null>(null);
+  /** Panier : les briques sur lesquelles portent les actions, par clé « zone:conversation ». */
+  let picked = $state(new Map<string, Picked>());
   let conversation = $state<Conversation | null>(null);
+  let simulate = $state(false);
+  let confirming = $state<'trash' | 'delete' | null>(null);
+  let showJournal = $state(false);
+  let closedCleanup = $state<number | null>(null);
+  let failures = $state<CleanupItem[]>([]);
+  let actionError = $state<string | null>(null);
 
   const view = $derived({ levels, path, filters });
-  const selected = $derived(new Set(selection ? [selection.id] : []));
+  const keys = $derived(new Set(picked.keys()));
+  const selectedIn = $derived.by(() => {
+    const sets: Record<Zone, Set<string>> = { inbox: new Set(), sent: new Set(), trash: new Set() };
+    for (const item of picked.values()) sets[item.zone].add(item.id);
+    return sets;
+  });
+  const pickedSize = $derived([...picked.values()].reduce((sum, item) => sum + item.size, 0));
+  const targets = $derived([...picked.values()].map(({ id, zone }) => ({ id, zone })));
+  const cleaning = $derived(gmail.cleanup !== null && ['running', 'auth'].includes(gmail.cleanup.status));
+  const failedIds = $derived(new Set(failures.filter((item) => item.zone === 'inbox').map((item) => item.id)));
   const preset = $derived(PRESETS.findIndex((candidate) => candidate.levels.join() === levels.join()));
   const unused = $derived((Object.keys(AXIS_LABELS) as Axis[]).filter((axis) => !levels.includes(axis)));
   const scope = $derived(gmail.scan?.scope ?? gmail.scopes[0]?.scope);
@@ -108,6 +143,7 @@
       (result) => {
         if (stale) return;
         data = result;
+        shown = { levels: current.levels, path: current.path };
         loadError = false;
       },
       (cause) => {
@@ -120,7 +156,7 @@
 
   $effect(() => {
     void refreshKey;
-    const current = selection;
+    const current = focus;
     if (!current) {
       conversation = null;
       return;
@@ -138,6 +174,8 @@
   function setLevels(next: Axis[]) {
     levels = next;
     path = [];
+    // Le bloc parent de la brique affichée n'a plus de sens avec d'autres niveaux.
+    if (focus) focus = { ...focus, block: null };
   }
 
   function drop(target: number) {
@@ -148,8 +186,74 @@
     setLevels(next);
   }
 
-  function selectBrick(brick: Brick, block: Block) {
-    selection = { id: brick.id, zone: 'inbox', block: { ...block, path: [...path, ...block.path] } };
+  // Les échecs du dernier nettoyage : encadrés de rouge dans le treemap, listés dans le bandeau.
+  $effect(() => {
+    const cleanup = gmail.cleanup;
+    if (!cleanup || cleanup.counts.failed.conversations === 0) {
+      failures = [];
+      return;
+    }
+    let stale = false;
+    gmailCleanup.items(cleanup.id, 'failed').then(
+      (result) => !stale && (failures = result.items),
+      () => undefined,
+    );
+    return () => (stale = true);
+  });
+
+  /** Clic : la brique remplace la sélection. Ctrl+clic : elle s'y ajoute ou en sort. */
+  function pick(item: Picked, block: Block | null, additive: boolean) {
+    const key = `${item.zone}:${item.id}`;
+    if (additive) {
+      const next = new Map(picked);
+      if (!next.delete(key)) next.set(key, item);
+      picked = next;
+    } else picked = new Map([[key, item]]);
+    focus = { id: item.id, zone: item.zone, block };
+  }
+
+  /** Ajoute au panier toutes les conversations reçues d'une vue : un bloc, ou tout ce qui est filtré. */
+  async function addAll(blockPath: string[], replace: boolean) {
+    actionError = null;
+    try {
+      const { items } = await selectAll({ levels, path: blockPath, filters }, 'inbox');
+      const next = new Map(replace ? [] : picked);
+      for (const [id, size] of items) next.set(`inbox:${id}`, { id, zone: 'inbox', size });
+      picked = next;
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 401) return onauth();
+      actionError = 'La sélection n’a pas pu être calculée. Réessayez dans un instant.';
+    }
+  }
+
+  /** Étend la sélection aux messages envoyés de la conversation affichée. */
+  function addWholeConversation() {
+    if (!conversation) return;
+    const next = new Map(picked);
+    next.set(`${conversation.zone}:${conversation.id}`, { id: conversation.id, zone: conversation.zone, size: conversation.size });
+    for (const other of conversation.otherZones) {
+      if (other.zone !== 'trash') next.set(`${other.zone}:${conversation.id}`, { id: conversation.id, zone: other.zone, size: other.size });
+    }
+    picked = next;
+  }
+
+  /** Archiver, lu, non lu : sans confirmation, comme le prévoit la maquette ; rien n'est supprimé. */
+  async function sort(action: 'archive' | 'read' | 'unread') {
+    actionError = null;
+    try {
+      await gmailCleanup.start({ action, items: targets, simulate });
+      started();
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.status === 401) return onauth();
+      actionError = 'L’action n’a pas pu démarrer. Réessayez dans un instant.';
+    }
+  }
+
+  function started() {
+    confirming = null;
+    closedCleanup = null;
+    picked = new Map();
+    onchange();
   }
 
   function toggleType(type: string) {
@@ -179,6 +283,11 @@
   {/if}
   <button class="btn small" onclick={onrescan} disabled={scanning}>↻ Actualiser</button>
 </div>
+
+{#if gmail.cleanup && gmail.cleanup.id !== closedCleanup}
+  <CleanupPanel service={gmailCleanup} cleanup={gmail.cleanup} {failures} {onchange} onclose={() => (closedCleanup = gmail.cleanup?.id ?? null)} />
+{/if}
+{#if actionError}<div class="callout warn" role="alert">{actionError}</div>{/if}
 
 <div class="main" class:nofilters={!filtersOpen}>
   {#if filtersOpen}
@@ -260,24 +369,31 @@
           {#if data && data.tree.c > 0}
             <Treemap
               tree={data.tree}
-              nameOf={(depth, key) => axisValueLabel(levels[path.length + depth]!, key)}
+              nameOf={(depth, key) => axisValueLabel(shown.levels[shown.path.length + depth]!, key)}
               colors={COLORS}
-              {selected}
+              selected={selectedIn.inbox}
+              failed={failedIds}
               label="Treemap des messages reçus : une brique par conversation"
-              onbrick={selectBrick}
-              onzoom={(relative) => (path = [...path, ...relative])}
+              onbrick={(brick, block, additive) =>
+                pick({ id: brick.id, zone: 'inbox', size: brick.v }, { ...block, path: [...shown.path, ...block.path] }, additive)}
+              onzoom={(relative) => (path = [...shown.path, ...relative])}
             />
           {:else if data}
             <p class="empty muted">Aucune conversation reçue ne correspond aux filtres.</p>
           {/if}
         {:else if mode === 'list'}
-          <ConversationList {view} {refreshKey} {selected} onselect={(row) => (selection = { id: row.id, zone: row.zone, block: null })} />
+          <ConversationList
+            {view}
+            {refreshKey}
+            selected={keys}
+            onselect={(row, additive) => pick({ id: row.id, zone: row.zone, size: row.size }, null, additive)}
+          />
         {:else}
           <AttachmentList
             {filters}
             {refreshKey}
-            {selected}
-            onselect={(attachment) => (selection = { id: attachment.threadId, zone: attachment.zone, block: null })}
+            selected={keys}
+            onselect={(attachment) => pick({ id: attachment.threadId, zone: attachment.zone, size: attachment.brickSize }, null, false)}
           />
         {/if}
       </div>
@@ -307,10 +423,10 @@
                 <Treemap
                   tree={{ k: null, v: data[zone].v, c: data[zone].c, bricks: data[zone].bricks }}
                   colors={COLORS}
-                  {selected}
+                  selected={selectedIn[zone]}
                   hatched={zone === 'trash'}
                   label="Zone {ZONE_LABELS[zone]}"
-                  onbrick={(brick) => (selection = { id: brick.id, zone, block: null })}
+                  onbrick={(brick, _block, additive) => pick({ id: brick.id, zone, size: brick.v }, null, additive)}
                 />
               </div>
             {/if}
@@ -325,21 +441,36 @@
           <i class="sw" style:background="var({type.color})"></i>{type.label}
         </button>
       {/each}
+      <span class="grow"></span>
+      <span class="hint">Ctrl+clic pour ajouter une brique à la sélection.</span>
     </div>
   </div>
 
   <DetailPanel
     {conversation}
     {email}
-    block={selection?.block ? { name: blockName(selection.block.path) || 'Toute la vue', v: selection.block.v, c: selection.block.c } : null}
-    onzoom={() => selection?.block && (path = selection.block.path)}
-  />
+    block={focus?.block ? { name: blockName(focus.block.path) || 'Toute la vue', v: focus.block.v, c: focus.block.c } : null}
+    onzoom={() => focus?.block && (path = focus.block.path)}
+  >
+    {#snippet actions()}
+      {#if conversation?.otherZones.some((other) => other.zone !== 'trash')}
+        <button class="btn small" onclick={addWholeConversation}>Sélectionner toute la conversation</button>
+        <span class="hint">Ajoute ses messages {conversation.zone === 'sent' ? 'reçus' : 'envoyés (zone Envoyés)'}.</span>
+      {/if}
+    {/snippet}
+    {#snippet blockActions()}
+      <button class="btn small" onclick={() => focus?.block && addAll(focus.block.path, false)}>Sélectionner tout le bloc</button>
+    {/snippet}
+  </DetailPanel>
 </div>
 
 {#if conversation}
   <section class="msgs">
     <div class="row">
-      <span class="lbl grow">E-mails de la sélection</span>
+      <span class="lbl grow">
+        E-mails de la sélection{#if picked.size > 1}
+          &nbsp;· {picked.size.toLocaleString('fr-FR')} conversations sélectionnées, e-mails de la dernière cliquée{/if}
+      </span>
       <span class="muted mono">{conversation.msgs} e-mail{conversation.msgs > 1 ? 's' : ''} · {formatBytes(conversation.size)}</span>
     </div>
     <div class="table-wrap">
@@ -363,6 +494,32 @@
     </div>
   </section>
 {/if}
+
+<ActionBar
+  summary={gmailCleanup.count(picked.size)}
+  size={pickedSize}
+  empty={picked.size === 0}
+  total={data?.tree.c ?? 0}
+  bind:simulate
+  blocked={scanning ? 'Nettoyage indisponible pendant un scan.' : cleaning ? 'Un nettoyage est en cours.' : null}
+  needsAccess={!gmail.canClean}
+  serviceName="Gmail"
+  onselectall={() => addAll(path, true)}
+  onclear={() => (picked = new Map())}
+  onaction={(action) => (confirming = action)}
+  onjournal={() => (showJournal = true)}
+>
+  {#snippet sorting(disabled)}
+    <button class="btn small" {disabled} onclick={() => sort('archive')}>Archiver</button>
+    <button class="btn small" {disabled} onclick={() => sort('read')}>Marquer lu</button>
+    <button class="btn small" {disabled} onclick={() => sort('unread')}>Marquer non lu</button>
+  {/snippet}
+</ActionBar>
+
+{#if confirming}
+  <ConfirmDialog service={gmailCleanup} action={confirming} items={targets} {simulate} ondone={started} oncancel={() => (confirming = null)} />
+{/if}
+{#if showJournal}<JournalDialog service={gmailCleanup} onclose={() => (showJournal = false)} />{/if}
 
 <style>
   .scopebar {
@@ -567,6 +724,7 @@
   .legend {
     display: flex;
     flex-wrap: wrap;
+    align-items: center;
     gap: 4px 6px;
   }
 

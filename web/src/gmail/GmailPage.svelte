@@ -15,10 +15,12 @@
   let refreshKey = $state(0);
 
   const active = $derived(gmail?.scan != null && ['running', 'paused', 'auth'].includes(gmail.scan.status));
+  const cleaning = $derived(gmail?.cleanup != null && ['running', 'auth'].includes(gmail.cleanup.status));
   const hasData = $derived((gmail?.summary.conversations ?? 0) > 0);
   const showScan = $derived(gmail?.scan != null && (screen === 'scan' || (screen === 'auto' && active) || (!hasData && !active)));
 
   let lastDone = -1;
+  let lastCleaned = '';
   async function refresh() {
     try {
       const next = await getGmailState();
@@ -28,6 +30,12 @@
       if (finished || Math.abs(done - lastDone) >= Math.max(200, (next.scan?.threadsTotal ?? 0) / 20)) {
         lastDone = done;
         refreshKey++;
+      }
+      // Pendant un nettoyage, le treemap suit les confirmations de Gmail.
+      const cleaned = JSON.stringify([next.cleanup?.id, next.cleanup?.status, next.cleanup?.counts]);
+      if (cleaned !== lastCleaned) {
+        if (lastCleaned !== '') refreshKey++;
+        lastCleaned = cleaned;
       }
       gmail = next;
       unreachable = false;
@@ -39,7 +47,7 @@
 
   $effect(() => {
     // Tant qu'un scan tourne, l'avancement est relu chaque seconde et demie ; sinon une fois suffit.
-    const timer = setInterval(() => active && refresh(), 1500);
+    const timer = setInterval(() => (active || cleaning) && refresh(), 1500);
     return () => clearInterval(timer);
   });
 
@@ -75,6 +83,7 @@
     {refreshKey}
     onrescan={() => (choosingScope = true)}
     onshowscan={() => (screen = 'scan')}
+    onchange={refresh}
     onauth={onchange}
   />
 {:else}

@@ -4,6 +4,7 @@ import cookie from '@fastify/cookie';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { OAUTH_CALLBACK_PATH, type Config } from './config.js';
+import type { GmailCleaner } from './gmail/cleaner.js';
 import { registerGmailRoutes } from './gmail/routes.js';
 import type { GmailScanner } from './gmail/scanner.js';
 import type { GmailStore } from './gmail/store.js';
@@ -24,13 +25,14 @@ export interface AppDeps {
   store: Store;
   gmail: GmailStore;
   scanner: GmailScanner;
+  cleaner: GmailCleaner;
   google: GoogleGateway | null;
   /** Dossier de l'interface compilée ; absent en développement, où Vite la sert. */
   webRoot?: string;
   logger?: boolean;
 }
 
-export async function buildApp({ config, store, gmail, scanner, google, webRoot, logger = true }: AppDeps): Promise<FastifyInstance> {
+export async function buildApp({ config, store, gmail, scanner, cleaner, google, webRoot, logger = true }: AppDeps): Promise<FastifyInstance> {
   // Le retour de Google porte un code à usage unique dans l'URL : on ne journalise que le chemin.
   const serializers = { req: (req: { method: string; url: string }) => ({ method: req.method, path: req.url.split('?')[0] }) };
   const app: FastifyInstance = Fastify({ logger: logger ? { serializers } : false });
@@ -134,6 +136,7 @@ export async function buildApp({ config, store, gmail, scanner, google, webRoot,
       const accountId = store.upsertAccount(profile, tokens);
       // Un scan suspendu par l'expiration de l'autorisation repart dès la reconnexion.
       scanner.resume(accountId);
+      cleaner.resume(accountId);
       const session = store.createSession(accountId);
       return reply.setCookie(SESSION_COOKIE, session.id, { ...cookieOptions, maxAge: session.maxAgeSeconds }).redirect('/');
     },
@@ -161,6 +164,7 @@ export async function buildApp({ config, store, gmail, scanner, google, webRoot,
       );
     }
     await scanner.cancel(account.id);
+    await cleaner.cancel(account.id);
     store.deleteAccount(account.id);
     return reply.clearCookie(SESSION_COOKIE, cookieOptions).send({ ok: true, revokedAtGoogle });
   });
@@ -188,7 +192,7 @@ export async function buildApp({ config, store, gmail, scanner, google, webRoot,
     }
   });
 
-  registerGmailRoutes(app, { store, gmail, scanner, google, requireAccount });
+  registerGmailRoutes(app, { store, gmail, scanner, cleaner, google, requireAccount });
 
   if (webRoot && existsSync(webRoot)) {
     await app.register(fastifyStatic, { root: webRoot });

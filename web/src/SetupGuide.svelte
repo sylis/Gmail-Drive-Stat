@@ -34,6 +34,10 @@
     </li>
     <li>Dans <b>Utilisateurs test</b>, ajoutez votre adresse Gmail.</li>
     <li>
+      Dans <b>Accès aux données</b>, ajoutez le champ d'application <code>https://mail.google.com/</code> (accès complet
+      à Gmail, nécessaire pour la suppression définitive).
+    </li>
+    <li>
       Dans <b>Identifiants › Créer des identifiants › ID client OAuth</b>, choisissez <b>Application Web</b> et collez
       cette URI de redirection :
       <span class="uri">

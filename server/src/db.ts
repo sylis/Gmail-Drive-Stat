@@ -131,6 +131,37 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (scan_id, thread_id)
   ) STRICT, WITHOUT ROWID;
   `,
+  // Lot 3 : nettoyages Gmail. Chaque ligne garde ce qui a été traité : c'est aussi le journal des actions.
+  `
+  CREATE TABLE gmail_cleanups (
+    id           INTEGER PRIMARY KEY,
+    account_id   INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    action       TEXT NOT NULL,
+    simulate     INTEGER NOT NULL,
+    status       TEXT NOT NULL,
+    error        TEXT,
+    source_id    INTEGER,
+    created_at   INTEGER NOT NULL,
+    finished_at  INTEGER
+  ) STRICT;
+  CREATE INDEX gmail_cleanups_account ON gmail_cleanups(account_id, id DESC);
+
+  CREATE TABLE gmail_cleanup_items (
+    cleanup_id   INTEGER NOT NULL REFERENCES gmail_cleanups(id) ON DELETE CASCADE,
+    thread_id    TEXT NOT NULL,
+    zone         TEXT NOT NULL,
+    subject      TEXT NOT NULL,
+    domain       TEXT NOT NULL,
+    size         INTEGER NOT NULL,
+    msgs         INTEGER NOT NULL,
+    message_ids  TEXT NOT NULL,
+    restore      TEXT NOT NULL,
+    state        TEXT NOT NULL,
+    error        TEXT,
+    PRIMARY KEY (cleanup_id, thread_id, zone)
+  ) STRICT, WITHOUT ROWID;
+  CREATE INDEX gmail_cleanup_items_state ON gmail_cleanup_items(cleanup_id, state);
+  `,
 ];
 
 /** Exécute `work` dans une transaction, annulée si elle échoue. */

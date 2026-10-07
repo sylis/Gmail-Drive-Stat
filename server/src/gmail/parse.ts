@@ -125,6 +125,12 @@ function collectAttachments(part: RawGmailPart | undefined, into: ParsedAttachme
   return into;
 }
 
+/** Zone d'un message d'après ses libellés : la corbeille l'emporte, puis les envois. */
+export function zoneOf(labelIds: string[]): Zone {
+  if (labelIds.includes('TRASH') || labelIds.includes('SPAM')) return 'trash';
+  return labelIds.includes('SENT') || labelIds.includes('DRAFT') ? 'sent' : 'inbox';
+}
+
 export function parseMessage(raw: RawGmailMessage, detail: boolean): ParsedMessage {
   const headers = new Map<string, string>();
   for (const header of raw.payload?.headers ?? []) {
@@ -145,12 +151,6 @@ export function parseMessage(raw: RawGmailMessage, detail: boolean): ParsedMessa
       ? from.addr
       : '';
   const labelIds = raw.labelIds ?? [];
-  const zone: Zone =
-    labelIds.includes('TRASH') || labelIds.includes('SPAM')
-      ? 'trash'
-      : labelIds.includes('SENT') || labelIds.includes('DRAFT')
-        ? 'sent'
-        : 'inbox';
 
   return {
     id: raw.id,
@@ -164,7 +164,7 @@ export function parseMessage(raw: RawGmailMessage, detail: boolean): ParsedMessa
     subject: decodeHeader(headers.get('subject') ?? '').trim(),
     listId,
     labelIds,
-    zone,
+    zone: zoneOf(labelIds),
     attachments: detail ? collectAttachments(raw.payload, []) : null,
   };
 }

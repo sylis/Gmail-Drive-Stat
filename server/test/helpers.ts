@@ -3,6 +3,7 @@ import { buildApp } from '../src/app.ts';
 import { loadConfig } from '../src/config.ts';
 import { SecretBox } from '../src/crypto.ts';
 import { openDatabase } from '../src/db.ts';
+import { GmailCleaner } from '../src/gmail/cleaner.ts';
 import { GmailScanner } from '../src/gmail/scanner.ts';
 import { GmailStore } from '../src/gmail/store.ts';
 import { Store } from '../src/store.ts';
@@ -26,7 +27,8 @@ export async function setup() {
   const gmail = new GmailStore(db);
   // Débit non bridé et attentes courtes : les tests n'ont pas à patienter comme face à Google.
   const scanner = new GmailScanner(store, gmail, fake, { unitsPerSecond: 1e9, backoff: () => 5 });
-  const app = await buildApp({ config, store, gmail, scanner, google: fake, logger: false });
+  const cleaner = new GmailCleaner(store, gmail, fake, { unitsPerSecond: 1e9, backoff: () => 5 });
+  const app = await buildApp({ config, store, gmail, scanner, cleaner, google: fake, logger: false });
 
   /** Joue l'aller-retour Google et renvoie les cookies posés par le serveur. */
   const login = async (): Promise<Record<string, string>> => {
@@ -43,5 +45,5 @@ export async function setup() {
   const post = (url: string, cookies: Record<string, string>, body: object = {}) =>
     app.inject({ method: 'POST', url, cookies, headers: { origin: ORIGIN }, payload: body });
 
-  return { app, db, store, gmail, scanner, fake, login, post };
+  return { app, db, store, gmail, scanner, cleaner, fake, login, post };
 }

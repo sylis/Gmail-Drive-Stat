@@ -30,7 +30,7 @@
     </thead>
     <tbody>
       {#each attachments as attachment, index (index)}
-        <tr class="clickable" class:sel={selected.has(attachment.threadId)} onclick={() => onselect(attachment)}>
+        <tr class="clickable" class:sel={selected.has(`${attachment.zone}:${attachment.threadId}`)} onclick={() => onselect(attachment)}>
           <td>{attachment.name}</td>
           <td><i class="sw" style:background="var({ATT_TYPES[attachment.type]?.color ?? '--t-oth'})"></i> {ATT_TYPES[attachment.type]?.label}</td>
           <td>{attachment.subject || '(sans objet)'}</td>

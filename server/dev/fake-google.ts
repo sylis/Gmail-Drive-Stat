@@ -1,6 +1,6 @@
 import {
-  GMAIL_READ_SCOPE,
-  hasScope,
+  canReadGmail,
+  canWriteGmail,
   MissingScopeError,
   NotFoundError,
   SCOPES,
@@ -37,7 +37,9 @@ export class FakeGoogle implements GoogleGateway {
   ];
   threads = new Map<string, FakeThread>();
   revoked = 0;
-  calls = { listThreads: 0, getThread: 0, getMessage: 0 };
+  calls = { listThreads: 0, getThread: 0, getMessage: 0, trash: 0, untrash: 0, delete: 0, batchDelete: 0, batchModify: 0 };
+  /** Messages que « Gmail » refuse de modifier ou de supprimer (erreur définitive, sans nouvelle tentative). */
+  refused = new Set<string>();
   /** Erreurs à lever lors des prochains appels à Gmail, dans l'ordre. */
   failures: Error[] = [];
   pageSize = 100;
@@ -92,8 +94,36 @@ export class FakeGoogle implements GoogleGateway {
     if (thread) thread.historyId = String(this.#history++);
   }
 
+  #find(id: string): { thread: FakeThread; message: RawGmailMessage } {
+    for (const thread of this.threads.values()) {
+      const message = thread.messages.find((candidate) => candidate.id === id);
+      if (message) return { thread, message };
+    }
+    throw new NotFoundError('message supprimé');
+  }
+
+  #relabel(id: string, add: string[], remove: string[]): void {
+    const { thread, message } = this.#find(id);
+    message.labelIds = [...new Set([...(message.labelIds ?? []).filter((label) => !remove.includes(label)), ...add])];
+    this.touch(thread.id);
+  }
+
+  #remove(id: string): void {
+    const { thread } = this.#find(id);
+    thread.messages = thread.messages.filter((message) => message.id !== id);
+    if (thread.messages.length === 0) this.threads.delete(thread.id);
+    else this.touch(thread.id);
+  }
+
   gmail(tokens: GoogleTokens): GmailApi {
-    if (!hasScope(tokens, GMAIL_READ_SCOPE)) throw new MissingScopeError('Lecture de Gmail non autorisée');
+    if (!canReadGmail(tokens)) throw new MissingScopeError('Lecture de Gmail non autorisée');
+    /** Préambule de toute écriture : autorisation, pannes simulées, refus par message. */
+    const write = async (ids: string[]): Promise<void> => {
+      if (!canWriteGmail(tokens)) throw new MissingScopeError('Modification de Gmail non autorisée');
+      await this.#before();
+      const refused = ids.find((id) => this.refused.has(id));
+      if (refused) throw Object.assign(new Error('Gmail refuse cette opération'), { response: { status: 400 } });
+    };
     const strip = (message: RawGmailMessage, detail: boolean): RawGmailMessage =>
       detail ? message : { ...message, payload: { headers: message.payload?.headers } };
     return {
@@ -129,11 +159,32 @@ export class FakeGoogle implements GoogleGateway {
       getMessage: async (id) => {
         await this.#before();
         this.calls.getMessage++;
-        for (const thread of this.threads.values()) {
-          const message = thread.messages.find((candidate) => candidate.id === id);
-          if (message) return message;
-        }
-        throw new NotFoundError('message supprimé');
+        return this.#find(id).message;
+      },
+      trashMessage: async (id) => {
+        await write([id]);
+        this.calls.trash++;
+        this.#relabel(id, ['TRASH'], ['INBOX']);
+      },
+      untrashMessage: async (id) => {
+        await write([id]);
+        this.calls.untrash++;
+        this.#relabel(id, [], ['TRASH']);
+      },
+      deleteMessage: async (id) => {
+        await write([id]);
+        this.calls.delete++;
+        this.#remove(id);
+      },
+      batchDelete: async (ids) => {
+        await write(ids);
+        this.calls.batchDelete++;
+        for (const id of ids) this.#remove(id);
+      },
+      batchModify: async (ids, { add = [], remove = [] }) => {
+        await write(ids);
+        this.calls.batchModify++;
+        for (const id of ids) this.#relabel(id, add, remove);
       },
     };
   }

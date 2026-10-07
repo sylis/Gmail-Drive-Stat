@@ -225,6 +225,15 @@ export class GmailQueries {
     return { total: total.n, rows };
   }
 
+  /** Toutes les briques d'une vue (filtres et zoom compris), pour les mettre dans la sélection : [conversation, taille]. */
+  select(accountId: number, { levels, path, filters }: TreemapQuery, zone: Zone, limit: number): [string, number][] {
+    const condition = withPath(where(accountId, zone, filters), levels, path);
+    const rows = this.#store
+      .q(`SELECT b.thread_id AS id, b.size FROM gmail_bricks b WHERE ${condition.sql} ORDER BY b.size DESC LIMIT ?`)
+      .all(...condition.params, limit) as { id: string; size: number }[];
+    return rows.map((row) => [row.id, row.size]);
+  }
+
   /** Valeurs d'un axe avec leur poids, compte tenu des autres filtres : alimente le panneau de filtres. */
   facet(accountId: number, axis: Axis, filters: Filters, search: string): { value: string; size: number; count: number }[] {
     const condition = where(accountId, 'inbox', filters, axis);
@@ -271,7 +280,7 @@ export class GmailQueries {
     const condition = where(accountId, null, filters);
     return this.#store
       .q(
-        `SELECT a.name, a.type, a.size, m.thread_id AS threadId, m.zone, m.subject, m.from_addr AS "from", m.date
+        `SELECT a.name, a.type, a.size, m.thread_id AS threadId, m.zone, m.subject, m.from_addr AS "from", m.date, b.size AS brickSize
          FROM gmail_attachments a
          JOIN gmail_messages m ON m.account_id = a.account_id AND m.id = a.message_id
          JOIN gmail_bricks b ON b.account_id = m.account_id AND b.thread_id = m.thread_id AND b.zone = m.zone
@@ -351,6 +360,8 @@ export interface TopAttachment {
   subject: string;
   from: string;
   date: number;
+  /** Taille de la brique (conversation dans cette zone) qui contient la pièce jointe. */
+  brickSize: number;
 }
 
 export interface Summary {

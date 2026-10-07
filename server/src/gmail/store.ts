@@ -1,7 +1,7 @@
 import type { StatementSync } from 'node:sqlite';
 import { transaction, type Db } from '../db.js';
 import { computeBricks, type BrickMessage } from './bricks.js';
-import type { AttType, ParsedMessage, Zone } from './parse.js';
+import { zoneOf, type AttType, type ParsedMessage, type Zone } from './parse.js';
 import type { ScanScope } from './scope.js';
 
 export type ScanStatus = 'running' | 'paused' | 'auth' | 'done' | 'cancelled' | 'failed';
@@ -174,6 +174,44 @@ export class GmailStore {
     );
   }
 
+  /** Applique en base un changement de libellés que Gmail vient de confirmer, et reclasse les conversations touchées. */
+  changeLabels(accountId: number, messageIds: string[], change: { add?: string[]; remove?: string[] }): void {
+    transaction(this.db, () => {
+      const threads = new Set<string>();
+      for (const id of messageIds) {
+        const row = this.q('SELECT thread_id, labels FROM gmail_messages WHERE account_id = ? AND id = ?').get(accountId, id) as
+          | { thread_id: string; labels: string }
+          | undefined;
+        if (!row) continue;
+        const labels = new Set(JSON.parse(row.labels) as string[]);
+        for (const label of change.remove ?? []) labels.delete(label);
+        for (const label of change.add ?? []) labels.add(label);
+        this.q('UPDATE gmail_messages SET labels = ?, zone = ? WHERE account_id = ? AND id = ?').run(
+          JSON.stringify([...labels]),
+          zoneOf([...labels]),
+          accountId,
+          id,
+        );
+        threads.add(row.thread_id);
+      }
+      for (const threadId of threads) this.#rebuildBricks(accountId, threadId);
+    });
+  }
+
+  /** Retire de la base des messages que Gmail vient de supprimer définitivement. */
+  removeMessages(accountId: number, messageIds: string[]): void {
+    transaction(this.db, () => {
+      const threads = new Set<string>();
+      for (const id of messageIds) {
+        const row = this.q('DELETE FROM gmail_messages WHERE account_id = ? AND id = ? RETURNING thread_id').get(accountId, id) as
+          | { thread_id: string }
+          | undefined;
+        if (row) threads.add(row.thread_id);
+      }
+      for (const threadId of threads) this.#rebuildBricks(accountId, threadId);
+    });
+  }
+
   /** Recalcule les briques d'une conversation ; à appeler dans une transaction après toute modification de ses messages. */
   rebuildBricks(accountId: number, threadId: string): void {
     this.#rebuildBricks(accountId, threadId);
@@ -257,6 +295,7 @@ export class GmailStore {
     transaction(this.db, () => {
       this.q('DELETE FROM gmail_threads WHERE account_id = ?').run(accountId);
       this.q('DELETE FROM gmail_scans WHERE account_id = ?').run(accountId);
+      this.q('DELETE FROM gmail_cleanups WHERE account_id = ?').run(accountId);
       this.q('DELETE FROM gmail_labels WHERE account_id = ?').run(accountId);
     });
   }

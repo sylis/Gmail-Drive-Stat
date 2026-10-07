@@ -1,4 +1,5 @@
 import { call } from './api';
+import type { Cleanup, CleanupService } from './cleanup';
 
 export type Zone = 'inbox' | 'sent' | 'trash';
 export type Axis = 'year' | 'quarter' | 'month' | 'label' | 'sender' | 'domain' | 'list' | 'group' | 'category' | 'attBucket' | 'attType';
@@ -47,7 +48,10 @@ export interface GmailLabel {
 
 export interface GmailState {
   authorized: boolean;
+  /** L'accès complet à Gmail a été accordé : le nettoyage peut agir sur la boîte. */
+  canClean: boolean;
   scan: ScanProgress | null;
+  cleanup: Cleanup | null;
   summary: {
     conversations: number;
     lastScannedAt: number | null;
@@ -142,6 +146,7 @@ export interface TopAttachment {
   subject: string;
   from: string;
   date: number;
+  brickSize: number;
 }
 
 export interface FacetValue {
@@ -163,6 +168,35 @@ export const getConversation = (id: string, zone: Zone) =>
   call<Conversation>(`/api/gmail/conversations/${encodeURIComponent(id)}?zone=${zone}`);
 export const getTopAttachments = (filters: Filters) => call<{ attachments: TopAttachment[] }>('/api/gmail/attachments', 'POST', { filters });
 export const eraseGmail = () => call<{ ok: true }>('/api/gmail/erase', 'POST');
+
+export const selectAll = (view: View, zone: Zone) => call<{ items: [string, number][] }>('/api/gmail/select', 'POST', { ...view, zone });
+
+const plural = (n: number, word: string) => `${n.toLocaleString('fr-FR')} ${word}${n > 1 ? 's' : ''}`;
+
+/** Nettoyage de Gmail : appels du serveur et vocabulaire des conversations. */
+export const gmailCleanup: CleanupService = {
+  preview: (items) => call('/api/gmail/cleanup/preview', 'POST', { items }),
+  start: (body) => call('/api/gmail/cleanup', 'POST', body),
+  cancel: () => call('/api/gmail/cleanup/cancel', 'POST'),
+  journal: () => call('/api/gmail/cleanups'),
+  items: (id, state, offset = 0) => call(`/api/gmail/cleanups/${id}/items?offset=${offset}${state ? `&state=${state}` : ''}`),
+  retry: (id, item) => call(`/api/gmail/cleanups/${id}/retry`, 'POST', item ? { item } : {}),
+  restore: (id) => call(`/api/gmail/cleanups/${id}/restore`, 'POST'),
+  count: (n) => plural(n, 'conversation'),
+  actions: {
+    trash: { name: 'Mise à la corbeille', done: 'mises à la corbeille' },
+    delete: { name: 'Suppression définitive', done: 'supprimées définitivement' },
+    archive: { name: 'Archivage', done: 'archivées' },
+    read: { name: 'Marquage comme lu', done: 'marquées comme lues' },
+    unread: { name: 'Marquage comme non lu', done: 'marquées comme non lues' },
+    untrash: { name: 'Restauration', done: 'restaurées' },
+  },
+  flaggedWarning: (n) =>
+    n === 0 ? '' : `${plural(n, 'conversation')} de la sélection ${n > 1 ? 'contiennent' : 'contient'} un message marqué important ou suivi.`,
+  trashNote: "L'espace n'est libéré qu'au vidage de la corbeille Gmail, sous 30 jours. Vous pourrez restaurer d'ici là.",
+  name: 'Gmail',
+  itemLabel: 'Conversation',
+};
 
 // --- Libellés d'affichage ---
 
