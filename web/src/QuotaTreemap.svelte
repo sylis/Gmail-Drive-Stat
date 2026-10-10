@@ -3,6 +3,7 @@
   import { TooltipComponent } from 'echarts/components';
   import * as echarts from 'echarts/core';
   import { CanvasRenderer } from 'echarts/renderers';
+  import { cushion } from './lib/cushion';
   import { formatBytes, formatPercent } from './lib/format';
 
   echarts.use([TreemapChart, TooltipComponent, CanvasRenderer]);
@@ -38,16 +39,19 @@
           roam: false,
           nodeClick: false,
           breadcrumb: { show: false },
-          itemStyle: { borderColor: color('--surface'), borderWidth: 2, gapWidth: 2 },
+          itemStyle: { borderColor: color('--tray'), borderWidth: 3, gapWidth: 2 },
           label: {
-            color: '#fff',
-            fontSize: 14,
-            fontWeight: 600,
+            color: '#ffffff',
+            fontSize: 15,
+            fontWeight: 800,
+            fontFamily: color('--f-display'),
+            textBorderColor: 'rgba(11, 13, 28, 0.45)',
+            textBorderWidth: 3,
             formatter: (item: { name: string; value: number }) => `${item.name}\n${formatBytes(item.value)}`,
           },
           data: blocks
             .filter((block) => block.bytes > 0)
-            .map((block) => ({ name: block.label, value: block.bytes, itemStyle: { color: color(block.colorVar) } })),
+            .map((block) => ({ name: block.label, value: block.bytes, itemStyle: { color: cushion(color(block.colorVar), 0.4) } })),
         },
       ],
     });
@@ -67,5 +71,8 @@
   .treemap {
     width: 100%;
     height: clamp(260px, 48vh, 460px);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--tray);
   }
 </style>

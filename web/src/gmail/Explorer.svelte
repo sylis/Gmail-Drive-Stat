@@ -401,7 +401,7 @@
 
       {#if mode === 'treemap' && data}
         {#each ['sent', 'trash'] as const as zone (zone)}
-          <div class="zone" class:closed={folded[zone]}>
+          <div class="zone" class:closed={folded[zone]} class:trash={zone === 'trash'}>
             <div class="zone-head">
               <div class="row">
                 {#if !folded[zone]}<b>{ZONE_LABELS[zone]}</b>{/if}

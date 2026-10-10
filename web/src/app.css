@@ -1,53 +1,76 @@
 /* Jetons repris de la maquette (docs/maquette.html). Polices système : rien n'est chargé depuis l'extérieur. */
+/* Charte « Tri postal en relief » : couleurs de timbres, jaune postal, encre bleu nuit, treemap en relief sur un plateau encre.
+   Les polices sont empaquetées avec l'interface (main.ts) : rien n'est chargé depuis l'extérieur. */
 :root {
-  --bg: #f3f5f8;
+  --bg: #eef1f8;
   --surface: #ffffff;
-  --ink: #1e2430;
-  --muted: #646d80;
-  --line: #c5cbd6;
-  --fill: #e5e9f0;
-  --fill2: #d5dbe5;
-  --accent: #2c57cf;
-  --accent-soft: #e3eafb;
-  --danger: #bf3b28;
-  --danger-soft: #fbe6e2;
-  --ok: #2e8a57;
-  --q-gmail: #d24f49;
-  --q-drive: #3a7fc2;
-  --q-trash: #d3962a;
-  --q-free: #a7adb8;
+  --ink: #1b1f3b;
+  --muted: #626a8c;
+  --line: #d9deea;
+  --fill: #e9ecf5;
+  --fill2: #dce0ee;
+  /* Bleu « par avion » pour les liens, les contours et les états actifs ; le jaune postal pour l'action principale. */
+  --accent: #2f4fc4;
+  --accent-soft: #fff2c2;
+  --stamp: #ffcc1a;
+  --on-stamp: #1b1f3b;
+  --danger: #d92d32;
+  --danger-soft: #fde4e3;
+  --ok: #11965a;
+  /* Plateau sur lequel sont posées les briques des treemaps. */
+  --tray: #1b1f3b;
+  --tray-2: #2c3158;
+  --tray-ink: #c9cdea;
+  --q-gmail: #ff4f4f;
+  --q-drive: #2f7bff;
+  --q-trash: #ffb800;
+  --q-free: #c9cfdd;
   /* Couleur d'une brique : type de sa plus grosse pièce jointe. */
-  --t-img: #3e9e6b;
-  --t-vid: #8656e8;
-  --t-pdf: #d24f49;
-  --t-doc: #3a7fc2;
-  --t-zip: #d3962a;
-  --t-aud: #cf5c9c;
-  --t-oth: #3fa7a7;
-  --t-none: #a7adb8;
-  --t-unk: #cbbfa6;
-  --f-display: 'Archivo', 'Helvetica Neue', Arial, sans-serif;
-  --f-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  --f-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --t-img: #19b36b;
+  --t-vid: #6d4cff;
+  --t-pdf: #ff4f4f;
+  --t-doc: #2f7bff;
+  --t-zip: #ffb800;
+  --t-aud: #ff5fae;
+  --t-oth: #00b0b0;
+  --t-none: #c9cfdd;
+  --t-unk: #d8c9a3;
+  --f-display: 'Bricolage Grotesque Variable', 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+  --f-body: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono: 'DM Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --r-pill: 999px;
+  --r-card: 14px;
+  --spring: cubic-bezier(0.34, 1.4, 0.5, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #13161c;
-    --surface: #1b1f27;
-    --ink: #e5e8ed;
-    --muted: #98a0af;
-    --line: #3a414e;
-    --fill: #262b35;
-    --fill2: #313744;
-    --accent: #82a5ff;
-    --accent-soft: #23305a;
-    --danger: #f0806c;
-    --danger-soft: #4a231d;
-    --ok: #5cc28a;
-    --q-free: #5d6472;
-    --t-none: #5d6472;
-    --t-unk: #6b6250;
+    --bg: #14162a;
+    --surface: #1c1f38;
+    --ink: #f2f3fb;
+    --muted: #a0a6c8;
+    --line: #30355a;
+    --fill: #252a4a;
+    --fill2: #2f3559;
+    --accent: #93a8ff;
+    --accent-soft: #3b3417;
+    --stamp: #ffd23f;
+    --danger: #ff6b6b;
+    --danger-soft: #4a2026;
+    --ok: #40d491;
+    --tray: #0b0d1c;
+    --tray-2: #222746;
+    --tray-ink: #a0a6c8;
+    --q-free: #3d4266;
+    --t-img: #3ccf86;
+    --t-vid: #8a71ff;
+    --t-pdf: #ff6b6b;
+    --t-doc: #5596ff;
+    --t-zip: #ffc53d;
+    --t-aud: #ff7ec0;
+    --t-oth: #2ccfcf;
+    --t-none: #4a5078;
+    --t-unk: #7a6e52;
     color-scheme: dark;
   }
 }
@@ -97,7 +120,7 @@ code {
 .card {
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--r-card);
   padding: 20px;
 }
 
@@ -122,14 +145,23 @@ code {
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 8px 14px;
+  border-radius: var(--r-pill);
+  padding: 8px 16px;
   cursor: pointer;
   text-decoration: none;
+  transition:
+    transform 0.15s var(--spring),
+    background 0.15s,
+    border-color 0.15s;
 }
 
 .btn:hover {
   background: var(--fill);
+  border-color: var(--ink);
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
 }
 
 .btn:disabled {
@@ -138,9 +170,9 @@ code {
 }
 
 .btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--surface);
+  background: var(--stamp);
+  border-color: var(--stamp);
+  color: var(--on-stamp);
 }
 
 .btn.primary:hover {
@@ -214,7 +246,6 @@ button.chip {
 .btn.small {
   padding: 3px 10px;
   font-size: 13px;
-  border-radius: 6px;
 }
 
 .btn.ghost {
@@ -223,7 +254,7 @@ button.chip {
 
 .btn.danger.solid {
   background: var(--danger);
-  color: var(--surface);
+  color: #ffffff;
 }
 
 .input {
@@ -231,7 +262,7 @@ button.chip {
   color: var(--ink);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 8px;
   padding: 5px 8px;
   min-width: 0;
 }
@@ -239,7 +270,7 @@ button.chip {
 .sw {
   width: 10px;
   height: 10px;
-  border-radius: 2px;
+  border-radius: 50%;
   display: inline-block;
   flex: none;
 }
@@ -254,13 +285,15 @@ button.chip {
 .bar-track > span {
   display: block;
   height: 100%;
+  border-radius: inherit;
   background: var(--accent);
+  transition: width 0.6s var(--spring);
 }
 
 .seg {
   display: inline-flex;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--r-pill);
   overflow: hidden;
 }
 
@@ -268,8 +301,8 @@ button.chip {
   border: 0;
   background: var(--surface);
   color: var(--ink);
-  font: 500 13px var(--f-body);
-  padding: 4px 12px;
+  font: 700 13px var(--f-body);
+  padding: 4px 13px;
   cursor: pointer;
 }
 
@@ -285,7 +318,7 @@ button.chip {
 .table-wrap {
   overflow: auto;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--surface);
 }
 
@@ -369,15 +402,17 @@ button.chip {
   width: min(100%, 560px);
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(11, 13, 28, 0.28);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .modal > header {
   padding: 14px 18px;
   border-bottom: 1px solid var(--line);
-  font: 700 16px var(--f-display);
+  font: 800 17px var(--f-display);
 }
 
 .modal > .body {
@@ -393,4 +428,13 @@ button.chip {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
 }

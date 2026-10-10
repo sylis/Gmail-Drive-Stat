@@ -30,6 +30,7 @@
   import { TreemapChart } from 'echarts/charts';
   import * as echarts from 'echarts/core';
   import { CanvasRenderer } from 'echarts/renderers';
+  import { cushion } from './lib/cushion';
 
   echarts.use([TreemapChart, CanvasRenderer]);
 
@@ -74,6 +75,7 @@
   let container: HTMLDivElement;
   let chart: echarts.ECharts | undefined;
   let theme = $state(0);
+  let shown: Node | undefined;
 
   $effect(() => {
     const instance = echarts.init(container);
@@ -94,6 +96,8 @@
     const scheme = window.matchMedia('(prefers-color-scheme: dark)');
     const onscheme = () => theme++;
     scheme.addEventListener('change', onscheme);
+    // Le canevas dessine avec les polices déjà chargées : on redessine une fois qu'elles le sont toutes.
+    document.fonts?.ready.then(onscheme);
     return () => {
       scheme.removeEventListener('change', onscheme);
       observer.disconnect();
@@ -107,12 +111,16 @@
     if (!chart) return;
     const css = getComputedStyle(container);
     const color = (name: string) => css.getPropertyValue(name).trim();
-    const ink = color('--ink');
+    const tray = color('--tray');
+    const tray2 = color('--tray-2');
+    const trayInk = color('--tray-ink');
     const hatch = hatched
       ? { decal: { symbol: 'rect', color: 'rgba(255,255,255,0.45)', dashArrayX: [1, 0], dashArrayY: [3, 5], rotation: -Math.PI / 4 } }
       : {};
-    const merged = { color: color('--fill2') };
-    const mergedLabel = { show: true, color: color('--muted'), fontSize: 11, overflow: 'truncate' };
+    const merged = { color: tray2, borderColor: tray2 };
+    const mergedLabel = { show: true, color: trayInk, fontSize: 11, overflow: 'truncate' };
+    const display = css.getPropertyValue('--f-display').trim();
+    const mono = css.getPropertyValue('--f-mono').trim();
     let depthMax = 0;
 
     const build = (node: Node, depth: number, path: string[]): Item[] => {
@@ -142,12 +150,12 @@
           brick,
           block,
           itemStyle: {
-            color: color(colors[brick.t] ?? '--t-none'),
+            color: cushion(color(colors[brick.t] ?? '--t-none')),
             ...hatch,
             ...(failed.has(brick.id)
               ? { borderColor: color('--danger'), borderWidth: 2 }
               : selected.has(brick.id)
-                ? { borderColor: ink, borderWidth: 2 }
+                ? { borderColor: '#ffffff', borderWidth: 2 }
                 : {}),
           },
         });
@@ -164,6 +172,15 @@
     };
 
     const data = build(tree, 0, []);
+    // Nouvelle vue (scan, zoom, filtre) : le plateau arrive avec un léger rebond ; une simple sélection ne rejoue rien.
+    if (tree !== shown) {
+      shown = tree;
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches)
+        container.animate([{ opacity: 0.35, transform: 'scale(0.985)' }, { opacity: 1, transform: 'none' }], {
+          duration: 480,
+          easing: 'cubic-bezier(0.34, 1.4, 0.5, 1)',
+        });
+    }
     // Sans cette remise à zéro, les en-têtes de la vue précédente restent dessinés par-dessus la nouvelle.
     chart.clear();
     chart.setOption(
@@ -182,14 +199,32 @@
             visibleMin: 4,
             childrenVisibleMin: 60,
             label: { show: false },
-            upperLabel: { show: true, height: 16, color: ink, fontSize: 11, fontWeight: 600 },
+            upperLabel: { show: true, height: 13, color: trayInk, fontSize: 10, fontFamily: mono },
             emphasis: { disabled: true },
-            itemStyle: { borderColor: color('--surface'), borderWidth: 0, gapWidth: 1 },
+            itemStyle: { color: tray, borderColor: tray, borderWidth: 0, gapWidth: 1 },
             levels: [
-              { itemStyle: { borderWidth: 0, gapWidth: 3 } },
+              { itemStyle: { borderWidth: 0, gapWidth: 2 } },
               ...Array.from({ length: depthMax }, (_, depth) => ({
-                itemStyle: { borderColor: color(depth === 0 ? '--fill2' : '--fill'), borderWidth: 1, gapWidth: 1 },
-                upperLabel: depth === 0 ? {} : { height: 13, fontSize: 10, fontWeight: 500 },
+                itemStyle: { borderColor: tray2, borderWidth: 1, gapWidth: 1 },
+                // Premier niveau : étiquette en pastille jaune postal, lisible sur le plateau.
+                upperLabel:
+                  depth === 0
+                    ? {
+                        height: 21,
+                        formatter: '{pill|{b}}',
+                        rich: {
+                          pill: {
+                            color: color('--on-stamp'),
+                            backgroundColor: color('--stamp'),
+                            borderRadius: 9,
+                            padding: [3, 7, 2, 7],
+                            fontSize: 11,
+                            fontWeight: 800,
+                            fontFamily: display,
+                          },
+                        },
+                      }
+                    : {},
               })),
             ],
             data,
@@ -208,5 +243,6 @@
     width: 100%;
     height: 100%;
     cursor: pointer;
+    background: var(--tray);
   }
 </style>

@@ -416,7 +416,7 @@
         </div>
 
         {#if mode === 'treemap' && data}
-          <div class="zone" class:closed={trashFolded}>
+          <div class="zone trash" class:closed={trashFolded}>
             <div class="zone-head">
               <div class="row">
                 {#if !trashFolded}<b>Corbeille</b>{/if}
