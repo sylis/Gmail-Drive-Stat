@@ -4,7 +4,7 @@ Outil de diagnostic de l'espace utilisé sur un compte Google, à la manière de
 
 État : **lots 1 à 4** livrés. Le serveur tourne dans un conteneur Docker, on s'y connecte avec son compte Google, et il affiche :
 
-- la **vue globale** du quota : Gmail et Photos, Drive, corbeille Drive, espace libre ;
+- la **vue globale** du quota : Gmail et Photos, Drive, corbeille Drive, espace libre ; un clic sur un bloc ouvre l'onglet correspondant ;
 - l'onglet **Gmail** : un scan en tâche de fond lit les métadonnées des conversations, puis un treemap les range par année, trimestre et domaine d'expéditeur (ou tout autre enchaînement de niveaux), avec filtres, liste triée et plus grosses pièces jointes.
 
 - le **nettoyage de Gmail** : on sélectionne des conversations dans le treemap ou la liste, puis on les met à la corbeille, on les supprime définitivement, on les archive ou on les marque lues ou non lues, avec simulation, suivi et journal.
@@ -53,7 +53,7 @@ Avant chaque scan, vous choisissez le périmètre : période, libellés, taille 
 
 Le serveur se limite à 200 unités de quota Gmail par seconde (le plafond de Google est de 250 par utilisateur), soit une vingtaine de conversations par seconde : comptez environ une heure et demie pour 100 000 conversations. Quand Google demande de ralentir, le scan patiente et reprend seul.
 
-Dans le treemap, une brique est une conversation ; sa taille est celle de ses messages reçus, sa couleur le type de sa plus grosse pièce jointe. Les messages envoyés et la corbeille ont leur zone à côté. Un clic sur une brique affiche la conversation et ses e-mails, un clic sur l'en-tête d'un bloc (ou un double-clic dans le bloc) zoome dessus.
+Dans le treemap, une brique est une conversation ; sa taille est celle de ses messages reçus, sa couleur le type de sa plus grosse pièce jointe. Les messages envoyés et la corbeille ont leur zone à côté, d'une largeur proportionnelle à leur part de l'espace Gmail (filtres compris, zoom non compris) : on voit d'un coup d'œil ce que vider la corbeille libérerait. Un clic sur une brique affiche la conversation et ses e-mails, un clic sur l'en-tête d'un bloc (ou un double-clic dans le bloc) zoome dessus.
 
 ### Nettoyage de Gmail
 

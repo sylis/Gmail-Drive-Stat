@@ -13,6 +13,10 @@
     bytes: number;
     /** Nom d'une variable CSS de couleur, ex. --q-drive. */
     colorVar: string;
+    /** Rubrique ouverte par un clic sur le bloc, ex. #/gmail. */
+    href?: string;
+    /** Nom de la rubrique, pour l'infobulle. */
+    target?: string;
   }
 
   let { blocks, total }: { blocks: Block[]; total: number } = $props();
@@ -21,13 +25,18 @@
 
   $effect(() => {
     const chart = echarts.init(container);
+    chart.on('click', (params) => {
+      const href = (params.data as { href?: string } | undefined)?.href;
+      if (href) location.hash = href;
+    });
     const css = getComputedStyle(container);
     const color = (name: string) => css.getPropertyValue(name).trim();
 
     chart.setOption({
       tooltip: {
-        formatter: (item: { name: string; value: number }) =>
-          `${item.name}<br><b>${formatBytes(item.value)}</b> · ${formatPercent(item.value, total)}`,
+        formatter: (item: { name: string; value: number; data: { target?: string } }) =>
+          `${item.name}<br><b>${formatBytes(item.value)}</b> · ${formatPercent(item.value, total)}` +
+          (item.data.target ? `<br><span style="opacity:.7">Clic : ouvrir ${item.data.target}</span>` : ''),
       },
       series: [
         {
@@ -51,7 +60,14 @@
           },
           data: blocks
             .filter((block) => block.bytes > 0)
-            .map((block) => ({ name: block.label, value: block.bytes, itemStyle: { color: cushion(color(block.colorVar), 0.4) } })),
+            .map((block) => ({
+              name: block.label,
+              value: block.bytes,
+              href: block.href,
+              target: block.target,
+              cursor: block.href ? 'pointer' : 'default',
+              itemStyle: { color: cushion(color(block.colorVar), 0.4) },
+            })),
         },
       ],
     });

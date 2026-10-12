@@ -109,6 +109,8 @@ export function registerGmailRoutes(app: FastifyInstance, { store, gmail, scanne
     const filters = parseFilters(request.body?.filters);
     return {
       tree: queries.treemap(account.id, { ...view, filters }),
+      // Les messages reçus sans le zoom : c'est à eux que se mesurent les zones Envoyés et Corbeille.
+      received: queries.total(account.id, 'inbox', filters),
       sent: queries.zone(account.id, 'sent', filters),
       trash: queries.zone(account.id, 'trash', filters),
     };

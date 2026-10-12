@@ -11,16 +11,20 @@
     onchange,
   }: { quota: Quota | null; loading: boolean; error: string | null; onreload: () => void; onchange: () => void } = $props();
 
-  const PARTS: Record<QuotaPartKey, { label: string; colorVar: string; note: string }> = {
+  const PARTS: Record<QuotaPartKey, { label: string; colorVar: string; note: string; href?: string; target?: string }> = {
     gmailPhotos: {
       label: 'Gmail et Photos',
       colorVar: '--q-gmail',
+      href: '#/gmail',
+      target: 'l’onglet Gmail',
       note: 'Google ne distingue pas les deux ; l’onglet Gmail mesure la part des e-mails.',
     },
-    drive: { label: 'Drive', colorVar: '--q-drive', note: 'Vos fichiers Drive, hors corbeille ; le détail est dans l’onglet Drive.' },
+    drive: { label: 'Drive', colorVar: '--q-drive', href: '#/drive', target: 'l’onglet Drive', note: 'Vos fichiers Drive, hors corbeille ; le détail est dans l’onglet Drive.' },
     driveTrash: {
       label: 'Corbeille Drive',
       colorVar: '--q-trash',
+      href: '#/drive',
+      target: 'l’onglet Drive, où la corbeille a sa zone',
       note: 'Compte dans le quota tant que la corbeille n’est pas vidée.',
     },
     free: { label: 'Libre', colorVar: '--q-free', note: 'Espace encore disponible.' },
@@ -65,6 +69,7 @@
 
     {#if quota}
       <QuotaTreemap {blocks} {total} />
+      <p class="muted small hint">Cliquez sur un bloc pour ouvrir la rubrique correspondante.</p>
 
       <table>
         <thead>
@@ -75,7 +80,7 @@
             <tr>
               <td>
                 <span class="swatch" style:background="var({block.colorVar})"></span>
-                {block.label}
+                {#if block.href}<a href={block.href}>{block.label}</a>{:else}{block.label}{/if}
                 <span class="note muted">{block.note}</span>
               </td>
               <td class="num mono">{formatBytes(block.bytes)}</td>
@@ -198,5 +203,20 @@
 
   .small {
     font-size: 13px;
+  }
+
+  td a {
+    color: inherit;
+    font-weight: 700;
+    text-decoration-color: var(--line);
+    text-underline-offset: 3px;
+  }
+
+  td a:hover {
+    text-decoration-color: currentColor;
+  }
+
+  .hint {
+    margin-top: -8px;
   }
 </style>

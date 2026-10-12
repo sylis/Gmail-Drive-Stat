@@ -164,6 +164,7 @@ test('le treemap retombe sur l’espace réel, quels que soient les niveaux, le 
   assert.equal(leafTotal(byPeriod.tree), summary.inbox.size);
   assert.equal(byPeriod.sent.v, summary.sent.size);
   assert.equal(byPeriod.trash.v, summary.trash.size);
+  assert.deepEqual(byPeriod.received, { v: summary.inbox.size, c: summary.inbox.conversations });
 
   for (const levels of [['label'], ['attType', 'sender'], []]) {
     const { tree } = (await post('/api/gmail/treemap', cookies, { levels })).json();
@@ -175,6 +176,8 @@ test('le treemap retombe sur l’espace réel, quels que soient les niveaux, le 
   const zoomed = (await post('/api/gmail/treemap', cookies, { levels: ['year', 'quarter', 'domain'], path: [year.k] })).json();
   assert.equal(zoomed.tree.v, year.v);
   assert.equal(zoomed.tree.children.length, year.children.length);
+  // Le zoom ne change pas la mesure des zones latérales.
+  assert.equal(zoomed.received.v, summary.inbox.size);
 
   // Un filtre restreint le treemap ; les valeurs proposées pour l'axe filtré restent complètes.
   const facet = (await post('/api/gmail/facet', cookies, { axis: 'domain' })).json().values;

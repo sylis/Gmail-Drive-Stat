@@ -99,6 +99,8 @@ export interface ZoneData {
 
 export interface TreemapData {
   tree: TreeNode;
+  /** Messages reçus retenus par les filtres, sans le zoom. */
+  received: { v: number; c: number };
   sent: ZoneData;
   trash: ZoneData;
 }
