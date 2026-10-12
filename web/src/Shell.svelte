@@ -46,7 +46,7 @@
 </script>
 
 <header class="bar">
-  <h1>Gmail Drive Stat</h1>
+  <h1><span class="logo" aria-hidden="true"><i></i><i></i><i></i></span>Gmail Drive Stat</h1>
   <nav aria-label="Sections">
     <a href="#/" class:on={page === 'overview'} aria-current={page === 'overview' ? 'page' : undefined}>Vue globale</a>
     <a href="#/gmail" class:on={page === 'gmail'} aria-current={page === 'gmail' ? 'page' : undefined}>Gmail</a>
@@ -90,8 +90,39 @@
   }
 
   h1 {
-    font-size: 17px;
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 19px;
     font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  /* Trois colis empilés, aux couleurs des pièces jointes les plus fréquentes. */
+  .logo {
+    width: 20px;
+    height: 20px;
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 2px;
+  }
+
+  .logo i {
+    border-radius: 3px;
+    background: var(--t-vid);
+  }
+
+  .logo i:first-child {
+    grid-row: span 2;
+  }
+
+  .logo i:nth-child(2) {
+    background: var(--t-zip);
+  }
+
+  .logo i:nth-child(3) {
+    background: var(--t-img);
   }
 
   nav {
@@ -101,16 +132,24 @@
   }
 
   nav a {
-    padding: 4px 10px;
-    border-radius: 6px;
-    color: var(--ink);
+    padding: 5px 13px;
+    border-radius: var(--r-pill);
+    color: var(--muted);
     text-decoration: none;
-    font-weight: 600;
+    font-weight: 700;
+    transition:
+      background 0.15s,
+      color 0.15s;
   }
 
-  nav a:hover,
-  nav a.on {
+  nav a:hover {
     background: var(--fill);
+    color: var(--ink);
+  }
+
+  nav a.on {
+    background: var(--ink);
+    color: var(--surface);
   }
 
   .gauge {
@@ -124,6 +163,14 @@
 
   .gauge .row {
     justify-content: space-between;
+  }
+
+  .gauge {
+    font-family: var(--f-mono);
+  }
+
+  .gauge .bar-track {
+    height: 6px;
   }
 
   .gauge .bar-track > span {

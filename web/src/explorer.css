@@ -59,10 +59,10 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border: 1px solid var(--ink);
-  border-radius: 6px;
-  padding: 2px 4px 2px 8px;
-  font-weight: 600;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  padding: 2px 4px 2px 9px;
+  font-weight: 700;
   font-size: 12.5px;
   background: var(--surface);
   cursor: grab;
@@ -125,10 +125,9 @@
 .explorer .view {
   flex: 1;
   min-width: 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 12px;
   overflow: hidden;
-  background: var(--fill);
+  background: var(--tray);
 }
 
 .explorer .view:has(.table-wrap) {
@@ -144,8 +143,9 @@
 .explorer .zone {
   width: 112px;
   flex: none;
-  border: 1px dashed var(--line);
-  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -153,6 +153,20 @@
 
 .explorer .zone.closed {
   width: 30px;
+}
+
+/* La corbeille est bordée comme une enveloppe « par avion ». */
+.explorer .zone.trash {
+  border: 4px solid transparent;
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    repeating-linear-gradient(135deg, var(--danger) 0 10px, var(--surface) 10px 16px, var(--q-drive) 16px 26px, var(--surface) 26px 32px) border-box;
+}
+
+.explorer .zone-head b {
+  font-family: var(--f-display);
+  font-weight: 800;
+  font-size: 13px;
 }
 
 .explorer .zone-head {
@@ -184,14 +198,14 @@
 .explorer .zone-body {
   flex: 1;
   min-height: 0;
-  border-top: 1px dashed var(--line);
+  background: var(--tray);
 }
 
 .explorer .fold {
   border: 1px solid var(--line);
   background: var(--surface);
   color: var(--ink);
-  border-radius: 4px;
+  border-radius: var(--r-pill);
   font: 12px var(--f-mono);
   padding: 0 5px;
   cursor: pointer;

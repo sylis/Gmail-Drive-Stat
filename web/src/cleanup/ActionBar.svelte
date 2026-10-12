@@ -73,10 +73,43 @@
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;
-    padding: 10px 20px;
-    border-top: 1px solid var(--line);
-    background: var(--fill);
+    margin: 0 10px 10px;
+    padding: 8px 14px;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(11, 13, 28, 0.25);
+    /* Barre encre : les jetons sont inversés pour que boutons et liens restent lisibles dessus. */
+    --surface: #1b1f3b;
+    --fill: #2c3158;
+    --line: #444a7a;
+    --ink: #ffffff;
+    --muted: #b9bedd;
+    --accent: #ffd23f;
+    background: var(--surface);
+    color: var(--ink);
     font-size: 13.5px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .actionbar {
+      --surface: #2a2f55;
+      --fill: #3a4070;
+      --line: #555c90;
+    }
+  }
+
+  .actionbar b {
+    font-family: var(--f-mono);
+    font-weight: 500;
+  }
+
+  .actionbar :global(.btn.danger:not(.solid)) {
+    color: #ff8a8a;
+    border-color: #ff8a8a;
+  }
+
+  .actionbar :global(.btn:not(.danger)) {
+    border-color: transparent;
+    background: var(--fill);
   }
 
   .sep {
