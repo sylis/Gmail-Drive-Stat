@@ -155,6 +155,11 @@
   width: 30px;
 }
 
+/* Zones dont la largeur suit leur part de l'espace (Gmail). */
+.explorer .zone.sized {
+  transition: width 0.35s var(--spring);
+}
+
 /* La corbeille est bordée comme une enveloppe « par avion ». */
 .explorer .zone.trash {
   border: 4px solid transparent;
@@ -176,6 +181,10 @@
   display: flex;
   flex-direction: column;
   gap: 1px;
+}
+
+.explorer .zone-head .share {
+  font-weight: 700;
 }
 
 .explorer .zone-head .row {

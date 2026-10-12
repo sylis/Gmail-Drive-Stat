@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ApiError, type Quota } from '../lib/api';
-  import { formatBytes } from '../lib/format';
+  import { formatBytes, formatPercent } from '../lib/format';
   import {
     ATT_TYPES,
     AXIS_LABELS,
@@ -74,6 +74,7 @@
   let filtersOpen = $state(true);
   let folded = $state<Record<'sent' | 'trash', boolean>>({ sent: false, trash: false });
   let dragged = $state<number | null>(null);
+  let stageWidth = $state(0);
 
   interface Picked {
     id: string;
@@ -108,6 +109,26 @@
   const scope = $derived(gmail.scan?.scope ?? gmail.scopes[0]?.scope);
   const scanning = $derived(gmail.scan !== null && ['running', 'paused', 'auth'].includes(gmail.scan.status));
   const scanned = $derived(gmail.summary.inbox.size + gmail.summary.sent.size + gmail.summary.trash.size);
+  /** Espace Gmail retenu par les filtres, reçus, envoyés et corbeille confondus. */
+  const gmailTotal = $derived(data ? data.received.v + data.sent.v + data.trash.v : 0);
+  /**
+   * Largeur des zones Envoyés et Corbeille : leur part de l'espace face aux messages reçus (sans le zoom),
+   * pour que la place qu'elles libéreraient se voie. Une zone repliée garde une languette fixe.
+   */
+  const zoneWidths = $derived.by(() => {
+    const FOLDED = 30, MIN = 84, GAP = 8, VIEW_MIN = 240;
+    const widths: Record<'sent' | 'trash', number> = { sent: FOLDED, trash: FOLDED };
+    if (!data || stageWidth === 0) return { sent: folded.sent ? FOLDED : 112, trash: folded.trash ? FOLDED : 112 };
+    const open = (['sent', 'trash'] as const).filter((zone) => !folded[zone]);
+    const available = stageWidth - 2 * GAP - (2 - open.length) * FOLDED;
+    const total = data.received.v + open.reduce((sum, zone) => sum + data![zone].v, 0);
+    for (const zone of open) widths[zone] = total > 0 ? (available * data[zone].v) / total : 0;
+    // Le treemap principal garde de quoi rester lisible, les zones de quoi afficher leur en-tête.
+    const room = available - VIEW_MIN;
+    const wanted = open.reduce((sum, zone) => sum + widths[zone], 0);
+    for (const zone of open) widths[zone] = Math.round(Math.max(MIN, wanted > room ? (widths[zone] * room) / wanted : widths[zone]));
+    return widths;
+  });
   const gmailPhotos = $derived(quota?.parts.find((part) => part.key === 'gmailPhotos')?.bytes ?? null);
 
   const chips = $derived.by(() => {
@@ -364,7 +385,7 @@
 
     {#if loadError}<div class="callout warn" role="alert">La lecture des résultats a échoué. Rechargez la page.</div>{/if}
 
-    <div class="stage">
+    <div class="stage" bind:clientWidth={stageWidth}>
       <div class="view">
         {#if mode === 'treemap'}
           {#if data && data.tree.c > 0}
@@ -401,7 +422,7 @@
 
       {#if mode === 'treemap' && data}
         {#each ['sent', 'trash'] as const as zone (zone)}
-          <div class="zone" class:closed={folded[zone]} class:trash={zone === 'trash'}>
+          <div class="zone sized" class:closed={folded[zone]} class:trash={zone === 'trash'} style:width="{zoneWidths[zone]}px">
             <div class="zone-head">
               <div class="row">
                 {#if !folded[zone]}<b>{ZONE_LABELS[zone]}</b>{/if}
@@ -416,6 +437,7 @@
                 <span class="vertical">{ZONE_LABELS[zone]} · {formatBytes(data[zone].v)}</span>
               {:else}
                 <span class="muted mono">{formatBytes(data[zone].v)}</span>
+                <span class="share mono" title="Part de l’espace Gmail retenu par les filtres">{formatPercent(data[zone].v, gmailTotal)} de Gmail</span>
                 <span class="muted">{zone === 'sent' ? 'et brouillons' : 'et spam, vidés sous 30 j'}</span>
               {/if}
             </div>

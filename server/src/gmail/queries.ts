@@ -119,12 +119,18 @@ export class GmailQueries {
     return tree.build();
   }
 
+  /** Taille et nombre de conversations d'une zone, sous les filtres mais sans zoom. */
+  total(accountId: number, zone: Zone, filters: Filters): { v: number; c: number } {
+    const condition = where(accountId, zone, filters);
+    return this.#store
+      .q(`SELECT COALESCE(SUM(b.size), 0) AS v, COUNT(*) AS c FROM gmail_bricks b WHERE ${condition.sql}`)
+      .get(...condition.params) as { v: number; c: number };
+  }
+
   /** Zone latérale (envoyés ou corbeille) : ses plus grosses briques et son total. */
   zone(accountId: number, zone: Zone, filters: Filters): { v: number; c: number; bricks: TreeBrick[] } {
     const condition = where(accountId, zone, filters);
-    const total = this.#store
-      .q(`SELECT COALESCE(SUM(b.size), 0) AS v, COUNT(*) AS c FROM gmail_bricks b WHERE ${condition.sql}`)
-      .get(...condition.params) as { v: number; c: number };
+    const total = this.total(accountId, zone, filters);
     const bricks = this.#store
       .q(`SELECT b.thread_id AS id, b.size AS v, b.att_type AS t FROM gmail_bricks b WHERE ${condition.sql} ORDER BY b.size DESC LIMIT ?`)
       .all(...condition.params, ZONE_BRICKS) as unknown as TreeBrick[];
