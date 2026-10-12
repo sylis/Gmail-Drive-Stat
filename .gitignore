@@ -10,3 +10,4 @@ data/
 *.db
 .svelte-kit/
 .DS_Store
+.claude/

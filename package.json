@@ -14,8 +14,9 @@
     "build:server": "tsc -p server",
     "build:web": "vite build",
     "start": "node dist/server/main.js",
-    "check": "tsc -p server --noEmit && svelte-check --tsconfig ./web/tsconfig.json",
-    "test": "node --import tsx --test server/test/*.test.ts"
+    "check": "tsc -p server/tsconfig.check.json && svelte-check --tsconfig ./web/tsconfig.json",
+    "test": "node --import tsx --test server/test/*.test.ts",
+    "demo": "npm run build:web && node --import tsx server/dev/demo.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
@@ -24,6 +25,9 @@
     "google-auth-library": "^11.1.0"
   },
   "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource/atkinson-hyperlegible": "^5.3.0",
+    "@fontsource/dm-mono": "^5.3.0",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@types/node": "^26.6.4",
     "echarts": "^6.1.0",

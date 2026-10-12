@@ -1,20 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { buildApp } from '../src/app.ts';
 import { ConfigError, loadConfig } from '../src/config.ts';
 import { SecretBox } from '../src/crypto.ts';
-import { openDatabase } from '../src/db.ts';
-import { ReauthRequiredError, type GoogleGateway, type GoogleProfile, type GoogleTokens } from '../src/google.ts';
+import { ReauthRequiredError } from '../src/google.ts';
 import { breakdownQuota } from '../src/quota.ts';
-import { Store } from '../src/store.ts';
-
-const ENV = {
-  PUBLIC_URL: 'http://localhost:8080/',
-  ENCRYPTION_KEY: 'cle-de-test-suffisamment-longue-0123456789',
-  ALLOWED_EMAILS: 'Moi@Example.com, autre@example.com',
-  GOOGLE_CLIENT_ID: 'id-de-test',
-  GOOGLE_CLIENT_SECRET: 'secret-de-test',
-};
+import { ENV, setup } from './helpers.ts';
 
 test('la configuration nomme chaque variable manquante', () => {
   assert.throws(
@@ -50,46 +40,6 @@ test('la répartition du quota retombe sur le total', () => {
   );
   assert.equal(breakdownQuota({ usage: '10' }).limit, null);
 });
-
-interface Fake {
-  profile: GoogleProfile;
-  tokens: GoogleTokens;
-  revoked: number;
-  quotaFails: boolean;
-}
-
-async function setup() {
-  const config = loadConfig(ENV);
-  const store = new Store(openDatabase(':memory:'), new SecretBox(config.encryptionKey));
-  const fake: Fake = {
-    profile: { sub: 'sub-1', email: 'moi@example.com', emailVerified: true, name: 'Moi' },
-    tokens: { refresh_token: 'rt', access_token: 'at', scope: 'openid' },
-    revoked: 0,
-    quotaFails: false,
-  };
-  const google: GoogleGateway = {
-    authUrl: ({ state, forceConsent }) => `https://google.test/auth?state=${state}&consent=${forceConsent}`,
-    exchangeCode: async () => ({ tokens: fake.tokens, profile: fake.profile }),
-    revoke: async () => void fake.revoked++,
-    storageQuota: async () => {
-      if (fake.quotaFails) throw new ReauthRequiredError('expirée');
-      return { limit: '100', usage: '40', usageInDrive: '10', usageInDriveTrash: '0' };
-    },
-  };
-  const app = await buildApp({ config, store, google, logger: false });
-
-  /** Joue l'aller-retour Google et renvoie les cookies posés par le serveur. */
-  const login = async () => {
-    const start = await app.inject({ url: '/auth/google' });
-    const state = new URL(start.headers.location as string).searchParams.get('state')!;
-    const callback = await app.inject({
-      url: `/auth/callback?code=abc&state=${state}`,
-      cookies: { gds_oauth_state: state },
-    });
-    return Object.fromEntries(callback.cookies.filter((c) => c.value).map((c) => [c.name, c.value]));
-  };
-  return { app, fake, login };
-}
 
 test('une adresse autorisée ouvre une session et lit son quota', async () => {
   const { app, login } = await setup();
@@ -163,7 +113,7 @@ test('l’API exige une session et les actions exigent la bonne origine', async 
 test('une autorisation expirée demande une reconnexion sans fermer la session', async () => {
   const { app, fake, login } = await setup();
   const cookies = await login();
-  fake.quotaFails = true;
+  fake.failures.push(new ReauthRequiredError('expirée'));
   const quota = await app.inject({ url: '/api/quota', cookies });
   assert.equal(quota.statusCode, 401);
   assert.equal(quota.json().error, 'reconnexion-requise');

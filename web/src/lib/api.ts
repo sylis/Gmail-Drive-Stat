@@ -26,11 +26,15 @@ export class ApiError extends Error {
   }
 }
 
-async function call<T>(path: string, method: 'GET' | 'POST' = 'GET'): Promise<T> {
-  const response = await fetch(path, { method, credentials: 'same-origin' });
-  const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new ApiError(response.status, body.error ?? 'erreur');
-  return body as T;
+export async function call<T>(path: string, method: 'GET' | 'POST' = 'GET', body?: object): Promise<T> {
+  const response = await fetch(path, {
+    method,
+    credentials: 'same-origin',
+    ...(method === 'POST' ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body ?? {}) } : {}),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new ApiError(response.status, data.error ?? 'erreur');
+  return data as T;
 }
 
 export const getStatus = () => call<Status>('/api/status');

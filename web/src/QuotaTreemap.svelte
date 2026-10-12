@@ -3,6 +3,7 @@
   import { TooltipComponent } from 'echarts/components';
   import * as echarts from 'echarts/core';
   import { CanvasRenderer } from 'echarts/renderers';
+  import { cushion } from './lib/cushion';
   import { formatBytes, formatPercent } from './lib/format';
 
   echarts.use([TreemapChart, TooltipComponent, CanvasRenderer]);
@@ -12,6 +13,10 @@
     bytes: number;
     /** Nom d'une variable CSS de couleur, ex. --q-drive. */
     colorVar: string;
+    /** Rubrique ouverte par un clic sur le bloc, ex. #/gmail. */
+    href?: string;
+    /** Nom de la rubrique, pour l'infobulle. */
+    target?: string;
   }
 
   let { blocks, total }: { blocks: Block[]; total: number } = $props();
@@ -20,13 +25,18 @@
 
   $effect(() => {
     const chart = echarts.init(container);
+    chart.on('click', (params) => {
+      const href = (params.data as { href?: string } | undefined)?.href;
+      if (href) location.hash = href;
+    });
     const css = getComputedStyle(container);
     const color = (name: string) => css.getPropertyValue(name).trim();
 
     chart.setOption({
       tooltip: {
-        formatter: (item: { name: string; value: number }) =>
-          `${item.name}<br><b>${formatBytes(item.value)}</b> · ${formatPercent(item.value, total)}`,
+        formatter: (item: { name: string; value: number; data: { target?: string } }) =>
+          `${item.name}<br><b>${formatBytes(item.value)}</b> · ${formatPercent(item.value, total)}` +
+          (item.data.target ? `<br><span style="opacity:.7">Clic : ouvrir ${item.data.target}</span>` : ''),
       },
       series: [
         {
@@ -38,16 +48,26 @@
           roam: false,
           nodeClick: false,
           breadcrumb: { show: false },
-          itemStyle: { borderColor: color('--surface'), borderWidth: 2, gapWidth: 2 },
+          itemStyle: { borderColor: color('--tray'), borderWidth: 3, gapWidth: 2 },
           label: {
-            color: '#fff',
-            fontSize: 14,
-            fontWeight: 600,
+            color: '#ffffff',
+            fontSize: 15,
+            fontWeight: 800,
+            fontFamily: color('--f-display'),
+            textBorderColor: 'rgba(11, 13, 28, 0.45)',
+            textBorderWidth: 3,
             formatter: (item: { name: string; value: number }) => `${item.name}\n${formatBytes(item.value)}`,
           },
           data: blocks
             .filter((block) => block.bytes > 0)
-            .map((block) => ({ name: block.label, value: block.bytes, itemStyle: { color: color(block.colorVar) } })),
+            .map((block) => ({
+              name: block.label,
+              value: block.bytes,
+              href: block.href,
+              target: block.target,
+              cursor: block.href ? 'pointer' : 'default',
+              itemStyle: { color: cushion(color(block.colorVar), 0.4) },
+            })),
         },
       ],
     });
@@ -67,5 +87,8 @@
   .treemap {
     width: 100%;
     height: clamp(260px, 48vh, 460px);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--tray);
   }
 </style>
