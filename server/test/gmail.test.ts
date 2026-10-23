@@ -7,7 +7,7 @@ import type { TreeNode } from '../src/gmail/queries.ts';
 import { GmailScanner } from '../src/gmail/scanner.ts';
 import { parseScope, scopeQuery, type ScanScope } from '../src/gmail/scope.ts';
 import { ReauthRequiredError, RetryLaterError } from '../src/google.ts';
-import { setup } from './helpers.ts';
+import { setup, until } from './helpers.ts';
 
 const MB = 1024 * 1024;
 const ALL: ScanScope = { period: { kind: 'all' }, labelIds: [], minSizeMb: 0, attachmentDetail: 'large' };
@@ -257,9 +257,9 @@ test('une autorisation expirée suspend le scan, la reconnexion le relance', asy
   const { fake, login, post, scanner, app } = await setup();
   seedMailbox(fake, 40);
   const cookies = await login();
-  fake.latencyMs = 1;
+  fake.latencyMs = 5;
   await post('/api/gmail/scan', cookies, { scope: ALL });
-  await new Promise((resolve) => setTimeout(resolve, 30));
+  await until(() => fake.calls.getThread >= 8);
   fake.failures.push(new ReauthRequiredError('expirée'));
   await scanner.idle();
 
@@ -336,9 +336,9 @@ test('après un arrêt du serveur, le scan reprend où il s’était arrêté', 
   const { fake, login, post, scanner, store, gmail, app } = await setup();
   seedMailbox(fake, 60);
   const cookies = await login();
-  fake.latencyMs = 2;
+  fake.latencyMs = 5;
   await post('/api/gmail/scan', cookies, { scope: ALL });
-  await new Promise((resolve) => setTimeout(resolve, 40));
+  await until(async () => (await app.inject({ url: '/api/gmail/state', cookies })).json().scan.threadsDone > 0);
   await scanner.shutdown();
   const stopped = (await app.inject({ url: '/api/gmail/state', cookies })).json().scan;
   assert.equal(stopped.status, 'running');

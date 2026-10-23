@@ -2,6 +2,10 @@
 
 Outil de diagnostic de l'espace utilisé sur un compte Google, à la manière de WinDirStat : un treemap des e-mails Gmail et des fichiers Drive pour repérer ce qui prend de la place et faire le ménage.
 
+*A self-hosted WinDirStat for your Google account: treemaps of Gmail and Drive usage, with cleanup. The interface is in French.*
+
+Logiciel libre sous licence MIT, à héberger soi-même : chaque installation utilise son propre projet Google Cloud, et vos données ne quittent pas votre serveur.
+
 État : **lots 1 à 4** livrés. Le serveur tourne dans un conteneur Docker, on s'y connecte avec son compte Google, et il affiche :
 
 - la **vue globale** du quota : Gmail et Photos, Drive, corbeille Drive, espace libre ; un clic sur un bloc ouvre l'onglet correspondant ;
@@ -13,20 +17,45 @@ Outil de diagnostic de l'espace utilisé sur un compte Google, à la manière de
 
 Restent le lot 5 (scans incrémentaux, historique, export) et Google Photos, hors périmètre pour l'instant.
 
-## Démarrage
+## Installation
 
-Il faut Docker et un projet Google Cloud en mode test (le guide s'affiche sur l'écran de connexion tant que les identifiants manquent).
+Il faut Docker et un projet Google Cloud en mode test (le guide s'affiche sur l'écran de connexion tant que les identifiants manquent). L'image est publiée pour amd64 et arm64 sur `ghcr.io/sylis/gmail-drive-stat` : `latest` pour la dernière version, `edge` pour la branche principale.
+
+- **TrueNAS SCALE** : suivez le [guide d'installation TrueNAS](docs/installation-truenas.md), avec un script qui crée le dataset et l'application.
+- **Docker Compose**, n'importe où :
+
+```yaml
+services:
+  gmailstat:
+    image: ghcr.io/sylis/gmail-drive-stat:latest
+    env_file: .env
+    environment:
+      DATABASE_PATH: /data/gmailstat.sqlite
+    ports:
+      - "8080:8080"
+    volumes:
+      - gmailstat-data:/data
+    restart: unless-stopped
+
+volumes:
+  gmailstat-data:
+```
 
 ```sh
-cp .env.example .env   # puis renseignez les valeurs
-docker compose up -d --build
+curl -fsSLO https://raw.githubusercontent.com/sylis/gmail-drive-stat/main/.env.example
+mv .env.example .env   # puis renseignez les valeurs
+docker compose up -d
 ```
+
+- **Depuis les sources** : `cp .env.example .env`, renseignez les valeurs, puis `docker compose up -d --build`.
 
 Ouvrez ensuite l'adresse indiquée dans `PUBLIC_URL` (par défaut `http://localhost:8080`).
 
+Google n'accepte l'adresse de retour de connexion qu'en HTTPS avec un nom de domaine, sauf pour `localhost`. Pour ouvrir l'outil depuis un autre poste du réseau, placez-le derrière un proxy inverse en HTTPS et mettez cette adresse dans `PUBLIC_URL` (détails dans le [guide TrueNAS](docs/installation-truenas.md#1-choisir-ladresse-de-loutil), valables ailleurs).
+
 ### Variables d'environnement
 
-Toute la configuration passe par le fichier `.env`, exclu de Git. Le serveur refuse de démarrer si une variable obligatoire manque, et dit laquelle.
+Toute la configuration passe par des variables d'environnement, dans le fichier `.env` (exclu de Git) ou dans le YAML de TrueNAS. Le serveur refuse de démarrer si une variable obligatoire manque, et dit laquelle.
 
 | Variable | Obligatoire | Rôle |
 |---|---|---|
@@ -95,9 +124,19 @@ En développement, déclarez aussi `http://localhost:8080/auth/callback` chez Go
 | `server/src/` | Serveur TypeScript (Fastify) : configuration, connexion Google, base SQLite, quota, moteur de nettoyage commun ; `gmail/` et `drive/` pour le scan, les requêtes du treemap et le nettoyage de chaque service |
 | `server/dev/` | Faux compte Google en mémoire, pour les tests et le mode démonstration |
 | `web/` | Interface Svelte, treemap ECharts ; `gmail/`, `drive/` et `cleanup/` (écrans de nettoyage communs) |
-| `docs/` | Feuille de route et maquette |
+| `docs/` | Feuille de route, maquette et guide d'installation TrueNAS |
+| `deploy/truenas/` | Script d'installation et YAML pour TrueNAS SCALE |
+
+## Publier une version
+
+Une étiquette `vX.Y.Z` poussée sur GitHub construit et publie l'image `ghcr.io/sylis/gmail-drive-stat` avec les étiquettes `X.Y.Z`, `X.Y` et `latest`. Chaque push sur `main` publie `edge`.
 
 ## Documents
 
 - [Feuille de route](docs/feuille-de-route.md) : décisions prises, phases du projet et lots de développement.
 - [Maquette de l'interface](docs/maquette.html) : six écrans basse fidélité de la v1 Gmail, à ouvrir dans un navigateur. L'onglet Drive en reprend la disposition.
+- [Installation sur TrueNAS SCALE](docs/installation-truenas.md).
+
+## Licence
+
+[MIT](LICENSE). Gmail Drive Stat n'est ni affilié à Google ni approuvé par Google.

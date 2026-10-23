@@ -3,6 +3,17 @@
 
   let copied = $state(false);
 
+  // Google n'accepte une URI de redirection en http, ou sur une adresse IP, que pour localhost.
+  const refusedByGoogle = $derived.by(() => {
+    try {
+      const { protocol, hostname } = new URL(redirectUri);
+      const local = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+      return !local && (protocol !== 'https:' || /^[\d.]+$|^\[/.test(hostname));
+    } catch {
+      return false;
+    }
+  });
+
   async function copy() {
     await navigator.clipboard.writeText(redirectUri);
     copied = true;
@@ -44,6 +55,13 @@
         <code>{redirectUri}</code>
         <button class="btn small" onclick={copy}>{copied ? 'Copié' : 'Copier'}</button>
       </span>
+      {#if refusedByGoogle}
+        <span class="callout warn redirect-warning">
+          Google refuse cette adresse : hors <code>localhost</code>, il exige du HTTPS et un nom de domaine, pas une
+          adresse IP. Placez l'outil derrière un proxy inverse en HTTPS et mettez son adresse dans
+          <code>PUBLIC_URL</code> (voir le guide d'installation du dépôt).
+        </span>
+      {/if}
     </li>
     <li>
       Copiez l'<b>ID client</b> et le <b>code secret</b> dans votre fichier <code>.env</code> :
@@ -60,6 +78,11 @@
 </section>
 
 <style>
+  .redirect-warning {
+    display: block;
+    margin-top: 8px;
+  }
+
   section {
     display: grid;
     gap: 14px;
