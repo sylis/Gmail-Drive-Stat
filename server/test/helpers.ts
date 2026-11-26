@@ -54,3 +54,12 @@ export async function setup() {
 
   return { app, db, store, gmail, scanner, cleaner, drive, driveScanner, driveCleaner, fake, login, post };
 }
+
+/** Attend qu'une condition devienne vraie, sans dépendre de la vitesse de la machine. */
+export async function until(condition: () => boolean | Promise<boolean>, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  while (!(await condition())) {
+    if (Date.now() > deadline) throw new Error('condition jamais remplie');
+    await new Promise((resolve) => setTimeout(resolve, 1));
+  }
+}

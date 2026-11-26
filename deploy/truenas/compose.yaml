@@ -1,0 +1,23 @@
+# Gmail Drive Stat sur TrueNAS SCALE (24.10 « Electric Eel » ou plus récent).
+# À coller dans Apps › Discover Apps › ⋮ › Install via YAML, après avoir remplacé les valeurs entre < >.
+# Le guide complet est dans docs/installation-truenas.md.
+services:
+  gmailstat:
+    image: ghcr.io/sylis/gmail-drive-stat:latest
+    # Utilisateur « apps » de TrueNAS : il doit pouvoir écrire dans le dataset monté sur /data.
+    user: "568:568"
+    environment:
+      # Adresse HTTPS à laquelle vous ouvrez l'outil (Google exige HTTPS et un nom de domaine hors localhost).
+      PUBLIC_URL: "<https://gmailstat.mondomaine.fr>"
+      GOOGLE_CLIENT_ID: "<id-client>.apps.googleusercontent.com"
+      GOOGLE_CLIENT_SECRET: "<code-secret>"
+      ALLOWED_EMAILS: "<vous@gmail.com>"
+      # Au moins 32 caractères aléatoires : openssl rand -base64 32. Ne la changez plus ensuite.
+      ENCRYPTION_KEY: "<cle-aleatoire>"
+      PORT: "8080"
+      DATABASE_PATH: /data/gmailstat.sqlite
+    ports:
+      - "8080:8080"
+    volumes:
+      - /mnt/<pool>/apps/gmail-drive-stat:/data
+    restart: unless-stopped
